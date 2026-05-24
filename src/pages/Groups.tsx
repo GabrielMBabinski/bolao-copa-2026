@@ -102,12 +102,12 @@ export default function Groups() {
                       <TableRow>
                         <TableHead className="w-12">#</TableHead>
                         <TableHead>Seleção</TableHead>
+                        <TableHead className="text-center">Pts</TableHead>
                         <TableHead className="text-center">J</TableHead>
                         <TableHead className="text-center">V</TableHead>
                         <TableHead className="text-center">E</TableHead>
                         <TableHead className="text-center">D</TableHead>
                         <TableHead className="text-center">SG</TableHead>
-                        <TableHead className="text-center">Pts</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -122,15 +122,15 @@ export default function Groups() {
                               <span className="font-medium">{standing.team_name}</span>
                             </div>
                           </TableCell>
+                          <TableCell className="text-center font-bold">
+                            {standing.points}
+                          </TableCell>
                           <TableCell className="text-center">{standing.played}</TableCell>
                           <TableCell className="text-center">{standing.won}</TableCell>
                           <TableCell className="text-center">{standing.drawn}</TableCell>
                           <TableCell className="text-center">{standing.lost}</TableCell>
                           <TableCell className="text-center font-medium">
                             {standing.goal_diff > 0 ? '+' : ''}{standing.goal_diff}
-                          </TableCell>
-                          <TableCell className="text-center font-bold">
-                            {standing.points}
                           </TableCell>
                         </TableRow>
                       ))}
