@@ -1,11 +1,33 @@
+import { useState, useEffect } from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { Trophy, Home, Users, Target, LayoutDashboard, LogOut, Shield } from 'lucide-react'
+import { Trophy, Home, Users, Target, LayoutDashboard, LogOut, Shield, Sun, Moon } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from './ui/button'
 
 export default function Layout() {
   const { user, profile, signOut } = useAuth()
   const location = useLocation()
+
+  // --- LÓGICA DO MODO ESCURO ---
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('theme') === 'dark' || 
+        (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const root = window.document.documentElement;
+    if (isDark) {
+      root.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      root.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [isDark]);
+  // ------------------------------
 
   const navItems = [
     { path: '/', label: 'Dashboard', icon: Home },
@@ -49,7 +71,19 @@ export default function Layout() {
                 })}
               </div>
             </div>
+            
             <div className="flex items-center space-x-4">
+              
+              {/* --- BOTÃO DO MODO ESCURO AQUI --- */}
+              <button 
+                onClick={() => setIsDark(!isDark)} 
+                className="p-2 rounded-full hover:bg-muted transition-colors flex items-center justify-center"
+                title="Alternar tema"
+              >
+                {isDark ? <Sun className="h-5 w-5 text-yellow-400" /> : <Moon className="h-5 w-5 text-foreground" />}
+              </button>
+              {/* ---------------------------------- */}
+
               <span className="text-sm text-muted-foreground">
                 {profile?.name || user?.email}
               </span>
@@ -63,6 +97,7 @@ export default function Layout() {
                 <span>Sair</span>
               </Button>
             </div>
+
           </div>
         </div>
       </nav>
