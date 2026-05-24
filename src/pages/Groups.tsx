@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Users, AlertCircle } from 'lucide-react'
+import TeamFlag from '@/components/TeamFlag'
 
 export default function Groups() {
   const [allStandings, setAllStandings] = useState<Array<{ group: string; data: GroupStanding[] }>>([])
@@ -117,9 +118,7 @@ export default function Groups() {
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
-                              <Badge variant="outline" className="text-xs">
-                                {standing.flag_code}
-                              </Badge>
+                              <TeamFlag flagCode={standing.flag_code} />
                               <span className="font-medium">{standing.team_name}</span>
                             </div>
                           </TableCell>

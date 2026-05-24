@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Target, Clock, Lock, Check, Users } from 'lucide-react'
+import TeamFlag from '@/components/TeamFlag'
 
 export default function Predictions() {
   const { user, profile } = useAuth()
@@ -147,9 +148,15 @@ export default function Predictions() {
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <span className="font-medium">{match.home_team.name}</span>
+                  <div className="flex items-center gap-2">
+                    <TeamFlag flagCode={match.home_team.flag_code} />
+                    <span className="font-medium">{match.home_team.name}</span>
+                  </div>
                   <span className="text-muted-foreground">vs</span>
-                  <span className="font-medium">{match.away_team.name}</span>
+                  <div className="flex items-center gap-2">
+                    <TeamFlag flagCode={match.away_team.flag_code} />
+                    <span className="font-medium">{match.away_team.name}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -207,9 +214,15 @@ export default function Predictions() {
           </div>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <span className="font-medium">{match.home_team.name}</span>
+              <div className="flex items-center gap-2">
+                <TeamFlag flagCode={match.home_team.flag_code} />
+                <span className="font-medium">{match.home_team.name}</span>
+              </div>
               <span className="text-muted-foreground">vs</span>
-              <span className="font-medium">{match.away_team.name}</span>
+              <div className="flex items-center gap-2">
+                <TeamFlag flagCode={match.away_team.flag_code} />
+                <span className="font-medium">{match.away_team.name}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -314,11 +327,17 @@ export default function Predictions() {
                     </div>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <span className="font-medium">{prediction.match.home_team.name}</span>
+                        <div className="flex items-center gap-2">
+                          <TeamFlag flagCode={prediction.match.home_team.flag_code} />
+                          <span className="font-medium">{prediction.match.home_team.name}</span>
+                        </div>
                         <span className="text-2xl font-bold">
                           {prediction.home_score} - {prediction.away_score}
                         </span>
-                        <span className="font-medium">{prediction.match.away_team.name}</span>
+                        <div className="flex items-center gap-2">
+                          <TeamFlag flagCode={prediction.match.away_team.flag_code} />
+                          <span className="font-medium">{prediction.match.away_team.name}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
