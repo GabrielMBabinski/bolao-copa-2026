@@ -1,4 +1,4 @@
-// Map 3-letter country codes to 2-letter ISO 3166-1 alpha-2 codes
+// Map 3-letter country codes to 2-letter ISO 3166-1 alpha-2 codes or regional codes
 const flagCodeMap: Record<string, string> = {
   // Group A
   'MEX': 'mx',
@@ -9,7 +9,7 @@ const flagCodeMap: Record<string, string> = {
   // Group B
   'ESP': 'es',
   'NED': 'nl',
-  'ENG': 'gb',
+  'ENG': 'gb-eng',
   'DEN': 'dk',
   
   // Group C
@@ -71,6 +71,18 @@ const flagCodeMap: Record<string, string> = {
   'UKR': 'ua',
   'CZE': 'cz',
   'ROU': 'ro',
+  
+  // Additional mappings for missing countries
+  'BIH': 'ba', // Bósnia
+  'SCO': 'gb-sct', // Escócia
+  'HAI': 'ht', // Haiti
+  'CUW': 'cw', // Curaçao
+  'SWE': 'se', // Suécia
+  'CPV': 'cv', // Cabo Verde
+  'IRQ': 'iq', // Iraque
+  'NOR': 'no', // Noruega
+  'ALG': 'dz', // Argélia
+  'JOR': 'jo', // Jordânia
 }
 
 interface TeamFlagProps {
