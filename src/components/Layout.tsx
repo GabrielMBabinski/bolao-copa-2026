@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { Trophy, Home, Users, Target, LayoutDashboard, LogOut, Shield, Sun, Moon } from 'lucide-react'
+import { Trophy, Home, Users, Target, LogOut, Shield, Sun, Moon } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from './ui/button'
 
