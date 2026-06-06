@@ -75,7 +75,7 @@ export default function Dashboard() {
       {/* BANNER DO NEYMAR (O Ícone Épico) */}
       <div className="relative w-full h-40 sm:h-64 md:h-80 rounded-2xl overflow-hidden mb-8 shadow-xl border border-muted group">
         <img 
-          src="/neymar-banner.png" 
+          src="/neymar-banner.jpg" 
           alt="Neymar Copa 2026" 
           className="w-full h-full object-cover object-top transition-transform duration-700 group-hover:scale-105"
         />
@@ -85,7 +85,7 @@ export default function Dashboard() {
             Rumo ao Hexa!
           </h2>
           <p className="text-white/90 text-sm sm:text-base md:text-lg font-medium drop-shadow-md max-w-md mt-1 sm:mt-2">
-            Faça seus palpites, desafie seus amigos e mostre quem entende de futebol.
+            Faça seus palpites!
           </p>
         </div>
       </div>
