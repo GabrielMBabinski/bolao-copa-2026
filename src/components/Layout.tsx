@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { Trophy, Home, Users, Target, LogOut, Shield, Sun, Moon } from 'lucide-react'
+import { Trophy, Home, Users, Target, LogOut, Shield, Sun, Moon, Menu, X } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from './ui/button'
 
 export default function Layout() {
   const { user, profile, signOut } = useAuth()
   const location = useLocation()
+
+  // Estado para controlar se o menu de celular está aberto ou fechado
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
   // --- LÓGICA DO MODO ESCURO ---
   const [isDark, setIsDark] = useState(() => {
@@ -36,6 +39,7 @@ export default function Layout() {
     { path: '/ranking', label: 'Ranking', icon: Trophy },
   ]
 
+  // Esconde o Admin como combinamos, ou deixa só para o seu usuário
   if (profile?.is_admin) {
     navItems.push({ path: '/admin', label: 'Admin', icon: Shield })
   }
@@ -45,36 +49,37 @@ export default function Layout() {
       <nav className="border-b bg-card">
         <div className="container mx-auto px-4">
           <div className="flex h-16 items-center justify-between">
-            <div className="flex items-center space-x-8">
-              <Link to="/" className="flex items-center space-x-2">
-                <Trophy className="h-6 w-6 text-primary" />
-                <span className="text-xl font-bold">Bolão Copa 2026</span>
-              </Link>
-              <div className="flex space-x-4">
-                {navItems.map((item) => {
-                  const Icon = item.icon
-                  const isActive = location.pathname === item.path
-                  return (
-                    <Link
-                      key={item.path}
-                      to={item.path}
-                      className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                        isActive
-                          ? 'bg-primary text-primary-foreground'
-                          : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                      }`}
-                    >
-                      <Icon className="h-4 w-4" />
-                      <span>{item.label}</span>
-                    </Link>
-                  )
-                })}
-              </div>
+            
+            {/* LADO ESQUERDO: Logo e Nome (Sempre visível) */}
+            <Link to="/" className="flex items-center space-x-2">
+              <Trophy className="h-6 w-6 text-primary" />
+              <span className="text-xl font-bold truncate">Bolão Copa 2026</span>
+            </Link>
+
+            {/* CENTRO: Links de Navegação (Escondido no Celular, Visível no Desktop) */}
+            <div className="hidden md:flex space-x-4">
+              {navItems.map((item) => {
+                const Icon = item.icon
+                const isActive = location.pathname === item.path
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span>{item.label}</span>
+                  </Link>
+                )
+              })}
             </div>
             
-            <div className="flex items-center space-x-4">
-              
-              {/* --- BOTÃO DO MODO ESCURO AQUI --- */}
+            {/* LADO DIREITO: Tema, Usuário e Sair (Escondido no Celular, Visível no Desktop) */}
+            <div className="hidden md:flex items-center space-x-4">
               <button 
                 onClick={() => setIsDark(!isDark)} 
                 className="p-2 rounded-full hover:bg-muted transition-colors flex items-center justify-center"
@@ -82,11 +87,11 @@ export default function Layout() {
               >
                 {isDark ? <Sun className="h-5 w-5 text-yellow-400" /> : <Moon className="h-5 w-5 text-foreground" />}
               </button>
-              {/* ---------------------------------- */}
 
-              <span className="text-sm text-muted-foreground">
+              <span className="text-sm text-muted-foreground truncate max-w-[150px]">
                 {profile?.name || user?.email}
               </span>
+              
               <Button
                 variant="ghost"
                 size="sm"
@@ -98,9 +103,68 @@ export default function Layout() {
               </Button>
             </div>
 
+            {/* BOTÃO HAMBÚRGUER (Visível no Celular, Escondido no Desktop) */}
+            <div className="md:hidden flex items-center space-x-2">
+              {/* Deixei o botão de modo escuro visível fora do menu hambúrguer por usabilidade */}
+              <button 
+                onClick={() => setIsDark(!isDark)} 
+                className="p-2 rounded-full hover:bg-muted transition-colors"
+              >
+                {isDark ? <Sun className="h-5 w-5 text-yellow-400" /> : <Moon className="h-5 w-5 text-foreground" />}
+              </button>
+
+              <button
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                className="p-2 text-foreground hover:bg-muted rounded-md transition-colors"
+              >
+                {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+              </button>
+            </div>
           </div>
         </div>
+
+        {/* MENU DROPDOWN DO CELULAR */}
+        {isMobileMenuOpen && (
+          <div className="md:hidden border-t bg-card px-4 py-4 space-y-3">
+            <div className="flex flex-col space-y-2">
+              {navItems.map((item) => {
+                const Icon = item.icon
+                const isActive = location.pathname === item.path
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    onClick={() => setIsMobileMenuOpen(false)} // Fecha o menu ao clicar
+                    className={`flex items-center space-x-2 px-3 py-3 rounded-md text-base font-medium transition-colors ${
+                      isActive
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    }`}
+                  >
+                    <Icon className="h-5 w-5" />
+                    <span>{item.label}</span>
+                  </Link>
+                )
+              })}
+            </div>
+            
+            <div className="pt-4 border-t flex flex-col space-y-3">
+              <span className="text-sm font-medium text-muted-foreground px-3">
+                Logado como: {profile?.name || user?.email}
+              </span>
+              <Button
+                variant="destructive"
+                onClick={signOut}
+                className="w-full flex items-center justify-center space-x-2"
+              >
+                <LogOut className="h-4 w-4" />
+                <span>Sair da Conta</span>
+              </Button>
+            </div>
+          </div>
+        )}
       </nav>
+
       <main className="container mx-auto px-4 py-8">
         <Outlet />
       </main>
