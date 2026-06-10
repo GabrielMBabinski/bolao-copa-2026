@@ -29,7 +29,8 @@ const getPhaseLabel = (phase: string) => {
 const canPredict = (matchDate: string) => new Date(matchDate) > new Date()
 
 // --- COMPONENTE EXTRAÍDO ---
-const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '' }: { match: MatchWithTeams, onSave: (id: string, home: number, away: number) => Promise<void>, initialHome?: number | '', initialAway?: number | '' }) => {
+// NOTA: Adicionamos a propriedade "predictionId" para saber se estamos editando
+const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', predictionId }: { match: MatchWithTeams, onSave: (id: string, home: number, away: number, predId?: string) => Promise<void>, initialHome?: number | '', initialAway?: number | '', predictionId?: string }) => {
   const [homeScore, setHomeScore] = useState<number | ''>(initialHome)
   const [awayScore, setAwayScore] = useState<number | ''>(initialAway)
   const [showFriends, setShowFriends] = useState(false)
@@ -41,7 +42,8 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '' }: {
     e.preventDefault()
     if (homeScore === '' || awayScore === '') return
     setSaving(true)
-    await onSave(match.id, Number(homeScore), Number(awayScore))
+    // Agora enviamos o predictionId junto para a função de salvar
+    await onSave(match.id, Number(homeScore), Number(awayScore), predictionId)
     setSaving(false)
   }
 
@@ -64,7 +66,6 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '' }: {
 
   return (
     <div className={`p-4 border rounded-lg flex flex-col gap-4 ${isLocked ? 'opacity-60 bg-muted/30' : 'bg-card'}`}>
-      {/* CABEÇALHO DO JOGO */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3">
         <Badge variant={isLocked ? "secondary" : "outline"} className="w-fit">{getPhaseLabel(match.phase)}</Badge>
         <div className="flex items-center gap-1 text-sm text-muted-foreground">
@@ -74,10 +75,7 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '' }: {
         </div>
       </div>
 
-      {/* ÁREA DOS TIMES E PLACAR */}
       <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-        
-        {/* Times */}
         <div className="flex items-center justify-center gap-2 sm:gap-4 w-full md:w-auto flex-wrap">
           <div className="flex flex-col items-center gap-1 min-w-[80px]">
             <TeamFlag flagCode={match.home_team.flag_code} />
@@ -90,7 +88,6 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '' }: {
           </div>
         </div>
 
-        {/* Inputs / Formulário */}
         {!isLocked && (
           <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto bg-muted/30 p-3 rounded-lg">
             <div className="flex items-center gap-2">
@@ -105,7 +102,6 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '' }: {
         )}
       </div>
 
-      {/* PALPITES DOS AMIGOS (Apenas para jogos bloqueados) */}
       {isLocked && (
         <div className="pt-2">
           <Button variant="outline" size="sm" className="w-full" onClick={() => {
@@ -162,30 +158,53 @@ export default function Predictions() {
     loadData()
   }, [user])
 
-  const savePrediction = async (matchId: string, home: number, away: number) => {
+  // NOTA: A função agora aceita o predictionId
+  const savePrediction = async (matchId: string, home: number, away: number, predictionId?: string) => {
     if (!user) return
     try {
-      const { error } = await predictions.upsertPrediction({
-        user_id: user.id, match_id: matchId, home_score: home, away_score: away,
-      })
-      if (error) throw error
+      // Montamos o pacote base
+      const payload: any = {
+        user_id: user.id, 
+        match_id: matchId, 
+        home_score: home, 
+        away_score: away
+      }
+
+      // SE TEM ID, É UMA EDIÇÃO: Colocamos o ID no pacote para o Supabase atualizar o existente
+      if (predictionId) {
+        payload.id = predictionId
+      }
+
+      const { error } = await predictions.upsertPrediction(payload)
+      if (error) {
+        console.error("Erro do Supabase:", error)
+        throw error
+      }
 
       const matchToMove = availableMatches.find(m => m.id === matchId)
       
       if (matchToMove) {
-        // Era um palpite NOVO: Remove de Disponíveis e joga em Meus Palpites
+        // NOVO PALPITE: Move de "Disponíveis" para "Meus Palpites"
         setAvailableMatches(prev => prev.filter(m => m.id !== matchId))
         setUserPredictions(prev => [...prev, { 
+          // Atualizamos a lista local pedindo para recarregar tudo do banco em seguida
+          // (ou usando o ID temporário até o F5)
           id: Math.random().toString(), match_id: matchId, home_score: home, away_score: away, points_earned: 0, match: matchToMove 
         } as any])
+        
+        // Recarrega do banco para pegar o ID real gerado pelo Supabase
+        const { data: preds } = await predictions.getUserPredictions(user.id)
+        if(preds) setUserPredictions(preds)
+
       } else {
-        // Era uma EDIÇÃO: Apenas atualiza o placar
+        // EDIÇÃO: Apenas atualiza a lista visualmente
         setUserPredictions(prev => prev.map(p => 
           p.match_id === matchId ? { ...p, home_score: home, away_score: away } : p
         ))
       }
     } catch (error) {
-      alert('Erro ao salvar palpite.')
+      console.error(error)
+      alert('Erro ao salvar palpite. Verifique a conexão.')
     }
   }
 
@@ -231,7 +250,8 @@ export default function Predictions() {
                     key={pred.id} 
                     match={pred.match} 
                     initialHome={pred.home_score} 
-                    initialAway={pred.away_score} 
+                    initialAway={pred.away_score}
+                    predictionId={pred.id} // <--- O PULO DO GATO: Passando o ID aqui!
                     onSave={savePrediction} 
                   />
                 )
