@@ -28,10 +28,10 @@ const getPhaseLabel = (phase: string) => {
 
 const canPredict = (matchDate: string) => new Date(matchDate) > new Date()
 
-// --- COMPONENTE EXTRAÍDO (OTIMIZAÇÃO DE PERFORMANCE) ---
-const PredictionForm = ({ match, onSave }: { match: MatchWithTeams, onSave: (id: string, home: number, away: number) => Promise<void> }) => {
-  const [homeScore, setHomeScore] = useState<number | ''>('')
-  const [awayScore, setAwayScore] = useState<number | ''>('')
+// --- COMPONENTE EXTRAÍDO ---
+const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '' }: { match: MatchWithTeams, onSave: (id: string, home: number, away: number) => Promise<void>, initialHome?: number | '', initialAway?: number | '' }) => {
+  const [homeScore, setHomeScore] = useState<number | ''>(initialHome)
+  const [awayScore, setAwayScore] = useState<number | ''>(initialAway)
   const [showFriends, setShowFriends] = useState(false)
   const [friendsPredictions, setFriendsPredictions] = useState<any[]>([])
   const [loadingFriends, setLoadingFriends] = useState(false)
@@ -170,13 +170,19 @@ export default function Predictions() {
       })
       if (error) throw error
 
-      // Atualiza as listas localmente para não precisar recarregar tudo do banco
       const matchToMove = availableMatches.find(m => m.id === matchId)
+      
       if (matchToMove) {
+        // Era um palpite NOVO: Remove de Disponíveis e joga em Meus Palpites
         setAvailableMatches(prev => prev.filter(m => m.id !== matchId))
         setUserPredictions(prev => [...prev, { 
           id: Math.random().toString(), match_id: matchId, home_score: home, away_score: away, points_earned: 0, match: matchToMove 
         } as any])
+      } else {
+        // Era uma EDIÇÃO: Apenas atualiza o placar
+        setUserPredictions(prev => prev.map(p => 
+          p.match_id === matchId ? { ...p, home_score: home, away_score: away } : p
+        ))
       }
     } catch (error) {
       alert('Erro ao salvar palpite.')
@@ -216,38 +222,54 @@ export default function Predictions() {
                <p>Você ainda não fez nenhum palpite</p>
              </Card>
           ) : (
-            userPredictions.map((pred) => (
-              <div key={pred.id} className="p-4 border rounded-lg bg-card flex flex-col gap-4">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b pb-3">
-                  <Badge variant="outline">{getPhaseLabel(pred.match.phase)}</Badge>
-                  <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                    <Clock className="h-4 w-4" /> {formatDate(pred.match.match_date)}
+            userPredictions.map((pred) => {
+              const isLocked = !canPredict(pred.match.match_date);
+
+              if (!isLocked) {
+                return (
+                  <PredictionForm 
+                    key={pred.id} 
+                    match={pred.match} 
+                    initialHome={pred.home_score} 
+                    initialAway={pred.away_score} 
+                    onSave={savePrediction} 
+                  />
+                )
+              }
+
+              return (
+                <div key={pred.id} className="p-4 border rounded-lg bg-card flex flex-col gap-4 opacity-80">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b pb-3">
+                    <Badge variant="secondary">{getPhaseLabel(pred.match.phase)}</Badge>
+                    <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                      <Lock className="h-4 w-4" /> {formatDate(pred.match.match_date)}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-center justify-center sm:justify-between gap-4">
+                    <div className="flex items-center gap-4 w-full justify-center sm:justify-start">
+                      <div className="flex flex-col items-center gap-1 min-w-[80px]">
+                        <TeamFlag flagCode={pred.match.home_team.flag_code} />
+                        <span className="font-medium text-sm text-center">{pred.match.home_team.name}</span>
+                      </div>
+                      <span className="text-3xl font-black text-primary tracking-widest bg-muted px-4 py-2 rounded-lg">
+                        {pred.home_score} - {pred.away_score}
+                      </span>
+                      <div className="flex flex-col items-center gap-1 min-w-[80px]">
+                        <TeamFlag flagCode={pred.match.away_team.flag_code} />
+                        <span className="font-medium text-sm text-center">{pred.match.away_team.name}</span>
+                      </div>
+                    </div>
+
+                    {pred.points_earned > 0 && (
+                      <Badge className="h-8 px-4 text-sm whitespace-nowrap bg-green-600 hover:bg-green-700">
+                        <Check className="h-4 w-4 mr-1" /> +{pred.points_earned} pts
+                      </Badge>
+                    )}
                   </div>
                 </div>
-
-                <div className="flex flex-col sm:flex-row items-center justify-center sm:justify-between gap-4">
-                  <div className="flex items-center gap-4 w-full justify-center sm:justify-start">
-                    <div className="flex flex-col items-center gap-1 min-w-[80px]">
-                      <TeamFlag flagCode={pred.match.home_team.flag_code} />
-                      <span className="font-medium text-sm text-center">{pred.match.home_team.name}</span>
-                    </div>
-                    <span className="text-3xl font-black text-primary tracking-widest bg-muted px-4 py-2 rounded-lg">
-                      {pred.home_score} - {pred.away_score}
-                    </span>
-                    <div className="flex flex-col items-center gap-1 min-w-[80px]">
-                      <TeamFlag flagCode={pred.match.away_team.flag_code} />
-                      <span className="font-medium text-sm text-center">{pred.match.away_team.name}</span>
-                    </div>
-                  </div>
-
-                  {pred.points_earned > 0 && (
-                    <Badge className="h-8 px-4 text-sm whitespace-nowrap bg-green-600 hover:bg-green-700">
-                      <Check className="h-4 w-4 mr-1" /> +{pred.points_earned} pts
-                    </Badge>
-                  )}
-                </div>
-              </div>
-            ))
+              )
+            })
           )}
         </TabsContent>
       </Tabs>
