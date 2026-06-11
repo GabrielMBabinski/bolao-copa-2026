@@ -28,44 +28,70 @@ const getPhaseLabel = (phase: string) => {
 
 const canPredict = (matchDate: string) => new Date(matchDate) > new Date()
 
+// --- COMPONENTE DE LISTA DE AMIGOS (Efeito Sanfona) ---
+const FriendsPredictionsList = ({ matchId }: { matchId: string }) => {
+  const [show, setShow] = useState(false)
+  const [list, setList] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+
+  const load = async () => {
+    setLoading(true)
+    try {
+      const { data } = await supabase
+        .from('predictions')
+        .select('home_score, away_score, profiles(name)')
+        .eq('match_id', matchId)
+      setList(data || [])
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="w-full mt-2">
+      <Button variant="outline" size="sm" className="w-full text-xs bg-muted/50 hover:bg-muted" onClick={() => {
+        if (!show) load()
+        setShow(!show)
+      }}>
+        <Users className="h-4 w-4 mr-2" />
+        {show ? 'Ocultar palpites da galera' : 'Ver palpites da galera'}
+      </Button>
+      {show && (
+        <div className="mt-3 p-3 bg-muted rounded-lg space-y-2">
+          {loading ? <div className="text-sm text-center">Carregando...</div> :
+           list.length === 0 ? <div className="text-sm text-center">Ninguém mais palpitou.</div> :
+           list.map((p, i) => (
+            <div key={i} className="flex items-center justify-between text-sm bg-background p-2 rounded border border-border/50 shadow-sm">
+              <span className="truncate font-medium">{p.profiles?.name || 'Anônimo'}</span>
+              <Badge variant="secondary" className="font-bold text-primary">{p.home_score} x {p.away_score}</Badge>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // --- COMPONENTE EXTRAÍDO ---
-// NOTA: Adicionamos a propriedade "predictionId" para saber se estamos editando
 const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', predictionId }: { match: MatchWithTeams, onSave: (id: string, home: number, away: number, predId?: string) => Promise<void>, initialHome?: number | '', initialAway?: number | '', predictionId?: string }) => {
   const [homeScore, setHomeScore] = useState<number | ''>(initialHome)
   const [awayScore, setAwayScore] = useState<number | ''>(initialAway)
-  const [showFriends, setShowFriends] = useState(false)
-  const [friendsPredictions, setFriendsPredictions] = useState<any[]>([])
-  const [loadingFriends, setLoadingFriends] = useState(false)
   const [saving, setSaving] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (homeScore === '' || awayScore === '') return
     setSaving(true)
-    // Agora enviamos o predictionId junto para a função de salvar
     await onSave(match.id, Number(homeScore), Number(awayScore), predictionId)
     setSaving(false)
-  }
-
-  const loadFriendsPredictions = async () => {
-    setLoadingFriends(true)
-    try {
-      const { data } = await supabase
-        .from('predictions')
-        .select('home_score, away_score, profiles(name)')
-        .eq('match_id', match.id)
-      setFriendsPredictions(data || [])
-    } catch (error) {
-      console.error('Erro:', error)
-    } finally {
-      setLoadingFriends(false)
-    }
   }
 
   const isLocked = !canPredict(match.match_date)
 
   return (
-    <div className={`p-4 border rounded-lg flex flex-col gap-4 ${isLocked ? 'opacity-60 bg-muted/30' : 'bg-card'}`}>
+    <div className={`p-4 border rounded-lg flex flex-col gap-4 ${isLocked ? 'opacity-80 bg-muted/10' : 'bg-card shadow-sm hover:shadow-md transition-all'}`}>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3">
         <Badge variant={isLocked ? "secondary" : "outline"} className="w-fit">{getPhaseLabel(match.phase)}</Badge>
         <div className="flex items-center gap-1 text-sm text-muted-foreground">
@@ -96,36 +122,14 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', pre
               <Input type="number" min="0" max="20" required value={awayScore} onChange={(e) => setAwayScore(e.target.value === '' ? '' : parseInt(e.target.value))} className="w-16 h-10 text-center font-bold text-lg" placeholder="0" />
             </div>
             <Button type="submit" disabled={saving} className="w-full sm:w-auto">
-              {saving ? 'Salvando...' : 'Salvar Palpite'}
+              {saving ? 'Salvando...' : 'Salvar'}
             </Button>
           </form>
         )}
       </div>
 
-      {isLocked && (
-        <div className="pt-2">
-          <Button variant="outline" size="sm" className="w-full" onClick={() => {
-            if (!showFriends) loadFriendsPredictions()
-            setShowFriends(!showFriends)
-          }}>
-            <Users className="h-4 w-4 mr-2" />
-            {showFriends ? 'Ocultar palpites' : 'Ver palpites da galera'}
-          </Button>
-
-          {showFriends && (
-            <div className="mt-3 p-3 bg-muted rounded-lg space-y-2">
-              {loadingFriends ? <div className="text-sm text-center">Carregando...</div> : 
-               friendsPredictions.length === 0 ? <div className="text-sm text-center">Nenhum palpite registrado</div> : 
-               friendsPredictions.map((pred, i) => (
-                <div key={i} className="flex items-center justify-between text-sm bg-background p-2 rounded border">
-                  <span className="font-medium">{pred.profiles?.name || 'Anônimo'}</span>
-                  <Badge variant="secondary">{pred.home_score} x {pred.away_score}</Badge>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      {/* Se trancou, esconde as caixas e mostra o botão da galera */}
+      {isLocked && <FriendsPredictionsList matchId={match.id} />}
     </div>
   )
 }
@@ -158,46 +162,26 @@ export default function Predictions() {
     loadData()
   }, [user])
 
-  // NOTA: A função agora aceita o predictionId
   const savePrediction = async (matchId: string, home: number, away: number, predictionId?: string) => {
     if (!user) return
     try {
-      // Montamos o pacote base
-      const payload: any = {
-        user_id: user.id, 
-        match_id: matchId, 
-        home_score: home, 
-        away_score: away
-      }
-
-      // SE TEM ID, É UMA EDIÇÃO: Colocamos o ID no pacote para o Supabase atualizar o existente
-      if (predictionId) {
-        payload.id = predictionId
-      }
+      const payload: any = { user_id: user.id, match_id: matchId, home_score: home, away_score: away }
+      if (predictionId) payload.id = predictionId
 
       const { error } = await predictions.upsertPrediction(payload)
-      if (error) {
-        console.error("Erro do Supabase:", error)
-        throw error
-      }
+      if (error) throw error
 
       const matchToMove = availableMatches.find(m => m.id === matchId)
       
       if (matchToMove) {
-        // NOVO PALPITE: Move de "Disponíveis" para "Meus Palpites"
         setAvailableMatches(prev => prev.filter(m => m.id !== matchId))
         setUserPredictions(prev => [...prev, { 
-          // Atualizamos a lista local pedindo para recarregar tudo do banco em seguida
-          // (ou usando o ID temporário até o F5)
           id: Math.random().toString(), match_id: matchId, home_score: home, away_score: away, points_earned: 0, match: matchToMove 
         } as any])
         
-        // Recarrega do banco para pegar o ID real gerado pelo Supabase
         const { data: preds } = await predictions.getUserPredictions(user.id)
         if(preds) setUserPredictions(preds)
-
       } else {
-        // EDIÇÃO: Apenas atualiza a lista visualmente
         setUserPredictions(prev => prev.map(p => 
           p.match_id === matchId ? { ...p, home_score: home, away_score: away } : p
         ))
@@ -244,21 +228,20 @@ export default function Predictions() {
             userPredictions.map((pred) => {
               const isLocked = !canPredict(pred.match.match_date);
 
+              // SE JOGO ABERTO -> Formulário de Edição
               if (!isLocked) {
                 return (
                   <PredictionForm 
-                    key={pred.id} 
-                    match={pred.match} 
-                    initialHome={pred.home_score} 
-                    initialAway={pred.away_score}
-                    predictionId={pred.id} // <--- O PULO DO GATO: Passando o ID aqui!
-                    onSave={savePrediction} 
+                    key={pred.id} match={pred.match} 
+                    initialHome={pred.home_score} initialAway={pred.away_score}
+                    predictionId={pred.id} onSave={savePrediction} 
                   />
                 )
               }
 
+              // SE JOGO TRANCADO -> Mostra Placar Fixo + Botão da Galera
               return (
-                <div key={pred.id} className="p-4 border rounded-lg bg-card flex flex-col gap-4 opacity-80">
+                <div key={pred.id} className="p-4 border rounded-lg bg-card flex flex-col gap-4 opacity-90 shadow-sm">
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b pb-3">
                     <Badge variant="secondary">{getPhaseLabel(pred.match.phase)}</Badge>
                     <div className="flex items-center gap-1 text-sm text-muted-foreground">
@@ -287,6 +270,9 @@ export default function Predictions() {
                       </Badge>
                     )}
                   </div>
+
+                  {/* O botão aparece logo abaixo do seu placar! */}
+                  <FriendsPredictionsList matchId={pred.match_id} />
                 </div>
               )
             })
