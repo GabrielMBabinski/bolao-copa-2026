@@ -1,7 +1,6 @@
 import 'dotenv/config'
 import { createClient } from '@supabase/supabase-js'
 
-// Environment variables
 const supabaseUrl = process.env.VITE_SUPABASE_URL || ''
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 const footballDataToken = process.env.FOOTBALL_DATA_TOKEN || ''
@@ -11,14 +10,12 @@ if (!supabaseUrl || !supabaseServiceKey || !footballDataToken) {
   process.exit(1)
 }
 
-// Create Supabase client with service role key to bypass RLS
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 async function updateMatches() {
   console.log('Fetching matches from football-data.org API...')
   
   try {
-    // Fetch matches from football-data.org API (World Cup 2026)
     const response = await fetch(
       'https://api.football-data.org/v4/competitions/2000/matches',
       {
@@ -36,29 +33,38 @@ async function updateMatches() {
     const matches = data.matches || []
 
     console.log(`Found ${matches.length} matches in API`)
+    
+    // RADAR: Imprime a lista de jogos para você saber qual ID colocar no banco
+    console.log('\n--- MAPA DE IDs DA API (Use isso para preencher o seu Supabase) ---')
+    matches.forEach((m: any) => {
+      console.log(`API ID: ${m.id} | ${m.homeTeam?.name || 'TBD'} x ${m.awayTeam?.name || 'TBD'}`)
+    })
+    console.log('----------------------------------------------------------------\n')
 
-    // Get existing matches from Supabase
+    // Puxa os jogos do Supabase, agora incluindo a nova coluna api_id
     const { data: existingMatches, error: fetchError } = await supabase
       .from('matches')
-      .select('id, home_score, away_score, status')
+      .select('id, api_id, home_score, away_score, status')
 
     if (fetchError) {
       throw new Error(`Error fetching existing matches: ${fetchError.message}`)
     }
 
+    // Cria o mapa baseando-se no api_id (e ignora os que ainda estão sem)
     const existingMatchMap = new Map(
-      (existingMatches || []).map((m: any) => [m.id, m])
+      (existingMatches || [])
+        .filter((m: any) => m.api_id != null)
+        .map((m: any) => [String(m.api_id), m])
     )
 
     let updatedCount = 0
     let skippedCount = 0
 
-    // Update matches that have changed
     for (const apiMatch of matches) {
+      // Agora ele procura pelo ID da API, não pelo UUID!
       const existingMatch = existingMatchMap.get(String(apiMatch.id))
 
       if (!existingMatch) {
-        console.log(`Match ${apiMatch.id} not found in database, skipping`)
         skippedCount++
         continue
       }
@@ -67,32 +73,34 @@ async function updateMatches() {
       const apiAwayScore = apiMatch.score?.fullTime?.away
       const apiStatus = apiMatch.status
 
-      // Map API status to database status
       let dbStatus = 'pending'
       if (apiStatus === 'FINISHED') dbStatus = 'finished'
       else if (apiStatus === 'IN_PLAY' || apiStatus === 'LIVE') dbStatus = 'in_progress'
       else if (apiStatus === 'TIMED' || apiStatus === 'SCHEDULED') dbStatus = 'pending'
       else if (apiStatus === 'POSTPONED') dbStatus = 'postponed'
 
-      // Check if match needs update
+      // Se a API mandar os placares vazios (jogo não começou), tratamos como zero temporariamente ou ignoramos
+      const homeScore = apiHomeScore !== null ? apiHomeScore : 0
+      const awayScore = apiAwayScore !== null ? apiAwayScore : 0
+
       const needsUpdate =
-        existingMatch.home_score !== apiHomeScore ||
-        existingMatch.away_score !== apiAwayScore ||
+        existingMatch.home_score !== homeScore ||
+        existingMatch.away_score !== awayScore ||
         existingMatch.status !== dbStatus
 
       if (needsUpdate) {
         console.log(
-          `Updating match ${apiMatch.id}: ${existingMatch.home_score}-${existingMatch.away_score} (${existingMatch.status}) -> ${apiHomeScore}-${apiAwayScore} (${dbStatus})`
+          `Updating match ${apiMatch.id}: ${existingMatch.home_score}-${existingMatch.away_score} (${existingMatch.status}) -> ${homeScore}-${awayScore} (${dbStatus})`
         )
 
         const { error: updateError } = await supabase
           .from('matches')
           .update({
-            home_score: apiHomeScore,
-            away_score: apiAwayScore,
+            home_score: homeScore,
+            away_score: awayScore,
             status: dbStatus,
           })
-          .eq('id', apiMatch.id)
+          .eq('id', existingMatch.id) // Atualiza usando a chave primária real do Supabase
 
         if (updateError) {
           console.error(`Error updating match ${apiMatch.id}: ${updateError.message}`)
