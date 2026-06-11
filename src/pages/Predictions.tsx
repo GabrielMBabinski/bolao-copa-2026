@@ -79,13 +79,19 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', pre
   const [homeScore, setHomeScore] = useState<number | ''>(initialHome)
   const [awayScore, setAwayScore] = useState<number | ''>(initialAway)
   const [saving, setSaving] = useState(false)
+  const [justSaved, setJustSaved] = useState(false) // <-- Novo estado para o botão verde
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (homeScore === '' || awayScore === '') return
+    
     setSaving(true)
     await onSave(match.id, Number(homeScore), Number(awayScore), predictionId)
     setSaving(false)
+    
+    // Dispara o feedback visual verde de sucesso por 2 segundos
+    setJustSaved(true)
+    setTimeout(() => setJustSaved(false), 2000)
   }
 
   const isLocked = !canPredict(match.match_date)
@@ -121,14 +127,20 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', pre
               <span className="text-muted-foreground font-bold">-</span>
               <Input type="number" min="0" max="20" required value={awayScore} onChange={(e) => setAwayScore(e.target.value === '' ? '' : parseInt(e.target.value))} className="w-16 h-10 text-center font-bold text-lg" placeholder="0" />
             </div>
-            <Button type="submit" disabled={saving} className="w-full sm:w-auto">
-              {saving ? 'Salvando...' : 'Salvar'}
+            
+            {/* O BOTÃO INTELIGENTE */}
+            <Button 
+              type="submit" 
+              disabled={saving || justSaved} 
+              className={`w-full sm:w-auto transition-colors duration-300 ${justSaved ? 'bg-green-600 hover:bg-green-700 text-white' : ''}`}
+            >
+              {saving ? 'Salvando...' : justSaved ? 'Salvo! ✅' : predictionId ? 'Atualizar' : 'Salvar'}
             </Button>
+
           </form>
         )}
       </div>
 
-      {/* Se trancou, esconde as caixas e mostra o botão da galera */}
       {isLocked && <FriendsPredictionsList matchId={match.id} />}
     </div>
   )
@@ -189,6 +201,7 @@ export default function Predictions() {
     } catch (error) {
       console.error(error)
       alert('Erro ao salvar palpite. Verifique a conexão.')
+      throw error // Lança o erro para que o botão saiba que falhou
     }
   }
 
@@ -228,7 +241,6 @@ export default function Predictions() {
             userPredictions.map((pred) => {
               const isLocked = !canPredict(pred.match.match_date);
 
-              // SE JOGO ABERTO -> Formulário de Edição
               if (!isLocked) {
                 return (
                   <PredictionForm 
@@ -239,7 +251,6 @@ export default function Predictions() {
                 )
               }
 
-              // SE JOGO TRANCADO -> Mostra Placar Fixo + Botão da Galera
               return (
                 <div key={pred.id} className="p-4 border rounded-lg bg-card flex flex-col gap-4 opacity-90 shadow-sm">
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b pb-3">
@@ -271,7 +282,6 @@ export default function Predictions() {
                     )}
                   </div>
 
-                  {/* O botão aparece logo abaixo do seu placar! */}
                   <FriendsPredictionsList matchId={pred.match_id} />
                 </div>
               )
