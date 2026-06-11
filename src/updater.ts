@@ -1,7 +1,6 @@
 import 'dotenv/config'
 import { createClient } from '@supabase/supabase-js'
 
-// Variáveis de ambiente
 const supabaseUrl = process.env.VITE_SUPABASE_URL || ''
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 const footballDataToken = process.env.FOOTBALL_DATA_TOKEN || ''
@@ -13,78 +12,24 @@ if (!supabaseUrl || !supabaseServiceKey || !footballDataToken) {
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-// --- DICIONÁRIO UNIVERSAL (Copa do Mundo 2026 - 48 Seleções) ---
-// Traduz o nome da API (em inglês) para o nome sem acento do seu Banco de Dados
+// --- DICIONÁRIO UNIVERSAL BLINDADO ---
 const TEAM_DICTIONARY: Record<string, string> = {
-  // Américas (CONCACAF)
-  'canada': 'canada',
-  'mexico': 'mexico',
-  'united states': 'estados unidos',
-  'usa': 'estados unidos',
-  'panama': 'panama',
-  'curacao': 'curacau',
-  'haiti': 'haiti',
-  
-  // África (CAF)
-  'egypt': 'egito',
-  'senegal': 'senegal',
-  'south africa': 'africa do sul',
-  'cape verde': 'cabo verde',
-  'morocco': 'marrocos',
-  'ivory coast': 'costa do marfim',
-  "cote d'ivoire": 'costa do marfim',
-  'algeria': 'argelia',
-  'tunisia': 'tunisia',
-  'ghana': 'gana',
-  'dr congo': 'rd congo',
-  'congo dr': 'rd congo',
-  
-  // América do Sul (CONMEBOL)
-  'argentina': 'argentina',
-  'ecuador': 'equador',
-  'colombia': 'colombia',
-  'uruguay': 'uruguai',
-  'brazil': 'brasil',
-  'paraguay': 'paraguai',
-  
-  // Ásia (AFC)
-  'iran': 'ira',
-  'south korea': 'coreia do sul',
-  'japan': 'japao',
-  'uzbekistan': 'uzbequistao',
-  'jordan': 'jordania',
-  'australia': 'australia',
-  'qatar': 'catar',
-  'saudi arabia': 'arabia saudita',
-  'iraq': 'iraque',
-  
-  // Oceania (OFC)
-  'new zealand': 'nova zelandia',
-  
-  // Europa (UEFA)
-  'germany': 'alemanha',
-  'switzerland': 'suica',
-  'scotland': 'escocia',
-  'france': 'franca',
-  'spain': 'espanha',
-  'portugal': 'portugal',
-  'netherlands': 'paises baixos', // A API também pode mandar 'holland'
-  'holland': 'paises baixos',
-  'austria': 'austria',
-  'norway': 'noruega',
-  'belgium': 'belgica',
-  'england': 'inglaterra',
-  'croatia': 'croacia',
-  'bosnia and herzegovina': 'bosnia e herzegovina',
-  'bosnia': 'bosnia e herzegovina',
-  'sweden': 'suecia',
-  'turkey': 'turquia',
-  'turkiye': 'turquia',
-  'czech republic': 'tchequia', // Você pode ter cadastrado como Chéquia ou Tchéquia
-  'czechia': 'tchequia',
+  'canada': 'canada', 'mexico': 'mexico', 'united states': 'estados unidos', 'usa': 'estados unidos',
+  'panama': 'panama', 'curacao': 'curacau', 'haiti': 'haiti', 'egypt': 'egito', 'senegal': 'senegal',
+  'south africa': 'africa do sul', 'cape verde': 'cabo verde', 'cabo verde': 'cabo verde', 'morocco': 'marrocos',
+  'ivory coast': 'costa do marfim', "cote d'ivoire": 'costa do marfim', 'algeria': 'argelia', 'tunisia': 'tunisia',
+  'ghana': 'gana', 'dr congo': 'republica democratica do congo', 'congo dr': 'rd congo',
+  'argentina': 'argentina', 'ecuador': 'equador', 'colombia': 'colombia', 'uruguay': 'uruguai', 'brazil': 'brasil',
+  'paraguay': 'paraguai', 'iran': 'ira', 'ir iran': 'ira', 'south korea': 'coreia do sul', 'korea republic': 'coreia do sul',
+  'japan': 'japao', 'uzbekistan': 'uzbequistao', 'jordan': 'jordania', 'australia': 'australia', 'qatar': 'catar',
+  'saudi arabia': 'arabia saudita', 'iraq': 'iraque', 'new zealand': 'nova zelandia', 'germany': 'alemanha',
+  'switzerland': 'suica', 'scotland': 'escocia', 'france': 'franca', 'spain': 'espanha', 'portugal': 'portugal',
+  'netherlands': 'paises baixos', 'holland': 'paises baixos', 'austria': 'austria', 'norway': 'noruega',
+  'belgium': 'belgica', 'england': 'inglaterra', 'croatia': 'croacia', 'bosnia and herzegovina': 'bosnia e herzegovina',
+  'bosnia': 'bosnia e herzegovina', 'sweden': 'suecia', 'turkey': 'turquia', 'turkiye': 'turquia',
+  'czech republic': 'chequia', 'czechia': 'tchequia'
 }
 
-// Funções Ajudantes
 const normalizeName = (name: string) => {
   return name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim()
 }
@@ -101,7 +46,7 @@ const translateApiName = (apiName: string): string => {
 }
 
 async function updateMatches() {
-  console.log('Iniciando sincronização automática com a API (Copa 2026)...')
+  console.log('Iniciando sincronização automática com a API (Modo Blindado)...')
   
   try {
     const response = await fetch(
@@ -127,7 +72,6 @@ async function updateMatches() {
       const apiId = apiMatch.id
       const translatedHome = translateApiName(apiMatch.homeTeam?.name || '')
       const translatedAway = translateApiName(apiMatch.awayTeam?.name || '')
-      const apiDate = new Date(apiMatch.utcDate).toISOString().split('T')[0] 
 
       let dbMatch = dbMatches?.find((m: any) => m.api_id === apiId)
 
@@ -136,12 +80,14 @@ async function updateMatches() {
         dbMatch = dbMatches?.find((m: any) => {
           const mHome = normalizeName(getTeamName(m.home_team))
           const mAway = normalizeName(getTeamName(m.away_team))
-          const mDate = new Date(m.match_date).toISOString().split('T')[0]
           
+          if (!mHome || !mAway || !translatedHome || !translatedAway) return false;
+
+          // A MÁGICA: Removida a verificação de data! 
+          // Basta os nomes dos dois times baterem em qualquer ordem.
           return (
             (mHome.includes(translatedHome) || translatedHome.includes(mHome)) &&
-            (mAway.includes(translatedAway) || translatedAway.includes(mAway)) &&
-            mDate === apiDate
+            (mAway.includes(translatedAway) || translatedAway.includes(mAway))
           )
         })
 
@@ -152,7 +98,7 @@ async function updateMatches() {
         }
       }
 
-      // Atualiza o placar
+      // Atualiza o placar e dispara o ranking se necessário
       if (dbMatch) {
         const homeScore = apiMatch.score?.fullTime?.home !== null ? apiMatch.score.fullTime.home : 0
         const awayScore = apiMatch.score?.fullTime?.away !== null ? apiMatch.score.fullTime.away : 0
