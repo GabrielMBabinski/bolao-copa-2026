@@ -1,6 +1,7 @@
 import 'dotenv/config'
 import { createClient } from '@supabase/supabase-js'
 
+// Variáveis de ambiente
 const supabaseUrl = process.env.VITE_SUPABASE_URL || ''
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 const footballDataToken = process.env.FOOTBALL_DATA_TOKEN || ''
@@ -12,49 +13,95 @@ if (!supabaseUrl || !supabaseServiceKey || !footballDataToken) {
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-// --- O TRADUTOR AUTOMÁTICO (API em Inglês -> Seu Banco em Português) ---
-// Adicione outros times aqui conforme necessário
+// --- DICIONÁRIO UNIVERSAL (Copa do Mundo 2026 - 48 Seleções) ---
+// Traduz o nome da API (em inglês) para o nome sem acento do seu Banco de Dados
 const TEAM_DICTIONARY: Record<string, string> = {
-  'south africa': 'africa do sul',
-  'brazil': 'brasil',
-  'cameroon': 'camaroes',
-  'switzerland': 'suica',
-  'serbia': 'servia',
-  'spain': 'espanha',
-  'germany': 'alemanha',
-  'england': 'inglaterra',
-  'netherlands': 'holanda',
-  'south korea': 'coreia do sul',
-  'united states': 'estados unidos',
-  'japan': 'japao',
-  'croatia': 'croacia',
-  'morocco': 'marrocos',
+  // Américas (CONCACAF)
+  'canada': 'canada',
   'mexico': 'mexico',
-  'czech republic': 'republica tcheca',
-  'czechia': 'republica tcheca',
-  'saudi arabia': 'arabia saudita'
+  'united states': 'estados unidos',
+  'usa': 'estados unidos',
+  'panama': 'panama',
+  'curacao': 'curacau',
+  'haiti': 'haiti',
+  
+  // África (CAF)
+  'egypt': 'egito',
+  'senegal': 'senegal',
+  'south africa': 'africa do sul',
+  'cape verde': 'cabo verde',
+  'morocco': 'marrocos',
+  'ivory coast': 'costa do marfim',
+  "cote d'ivoire": 'costa do marfim',
+  'algeria': 'argelia',
+  'tunisia': 'tunisia',
+  'ghana': 'gana',
+  'dr congo': 'rd congo',
+  'congo dr': 'rd congo',
+  
+  // América do Sul (CONMEBOL)
+  'argentina': 'argentina',
+  'ecuador': 'equador',
+  'colombia': 'colombia',
+  'uruguay': 'uruguai',
+  'brazil': 'brasil',
+  'paraguay': 'paraguai',
+  
+  // Ásia (AFC)
+  'iran': 'ira',
+  'south korea': 'coreia do sul',
+  'japan': 'japao',
+  'uzbekistan': 'uzbequistao',
+  'jordan': 'jordania',
+  'australia': 'australia',
+  'qatar': 'catar',
+  'saudi arabia': 'arabia saudita',
+  'iraq': 'iraque',
+  
+  // Oceania (OFC)
+  'new zealand': 'nova zelandia',
+  
+  // Europa (UEFA)
+  'germany': 'alemanha',
+  'switzerland': 'suica',
+  'scotland': 'escocia',
+  'france': 'franca',
+  'spain': 'espanha',
+  'portugal': 'portugal',
+  'netherlands': 'paises baixos', // A API também pode mandar 'holland'
+  'holland': 'paises baixos',
+  'austria': 'austria',
+  'norway': 'noruega',
+  'belgium': 'belgica',
+  'england': 'inglaterra',
+  'croatia': 'croacia',
+  'bosnia and herzegovina': 'bosnia e herzegovina',
+  'bosnia': 'bosnia e herzegovina',
+  'sweden': 'suecia',
+  'turkey': 'turquia',
+  'turkiye': 'turquia',
+  'czech republic': 'tchequia', // Você pode ter cadastrado como Chéquia ou Tchéquia
+  'czechia': 'tchequia',
 }
 
-// Limpa acentos e deixa em minúsculo
+// Funções Ajudantes
 const normalizeName = (name: string) => {
   return name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim()
 }
 
-// Extrai o nome burlando erros de formato
 const getTeamName = (teamData: any): string => {
   if (!teamData) return ''
   if (Array.isArray(teamData)) return teamData[0]?.name || ''
   return teamData.name || ''
 }
 
-// Pega o nome da API e passa pelo tradutor
 const translateApiName = (apiName: string): string => {
   const normalizedApi = normalizeName(apiName)
   return TEAM_DICTIONARY[normalizedApi] || normalizedApi
 }
 
 async function updateMatches() {
-  console.log('Iniciando sincronização automática com a API...')
+  console.log('Iniciando sincronização automática com a API (Copa 2026)...')
   
   try {
     const response = await fetch(
@@ -78,14 +125,13 @@ async function updateMatches() {
 
     for (const apiMatch of apiMatches) {
       const apiId = apiMatch.id
-      // Traduz o nome do time da API para o Português do seu banco
       const translatedHome = translateApiName(apiMatch.homeTeam?.name || '')
       const translatedAway = translateApiName(apiMatch.awayTeam?.name || '')
       const apiDate = new Date(apiMatch.utcDate).toISOString().split('T')[0] 
 
       let dbMatch = dbMatches?.find((m: any) => m.api_id === apiId)
 
-      // SE NÃO TEM ID AINDA: Faz o casamento automático usando o nome traduzido
+      // SE NÃO TEM ID AINDA: Faz o casamento automático
       if (!dbMatch) {
         dbMatch = dbMatches?.find((m: any) => {
           const mHome = normalizeName(getTeamName(m.home_team))
@@ -106,7 +152,7 @@ async function updateMatches() {
         }
       }
 
-      // Atualiza o placar e dispara o ranking
+      // Atualiza o placar
       if (dbMatch) {
         const homeScore = apiMatch.score?.fullTime?.home !== null ? apiMatch.score.fullTime.home : 0
         const awayScore = apiMatch.score?.fullTime?.away !== null ? apiMatch.score.fullTime.away : 0
@@ -122,7 +168,7 @@ async function updateMatches() {
           dbMatch.status !== dbStatus
 
         if (needsUpdate) {
-          console.log(`⚽ GOL/FIM DE JOGO: ${getTeamName(dbMatch.home_team)} x ${getTeamName(dbMatch.away_team)} | ${homeScore}-${awayScore} (${dbStatus})`)
+          console.log(`⚽ ATUALIZANDO: ${getTeamName(dbMatch.home_team)} x ${getTeamName(dbMatch.away_team)} | ${homeScore}-${awayScore} (${dbStatus})`)
           
           const { error: updateError } = await supabase
             .from('matches')
