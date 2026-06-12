@@ -14,6 +14,9 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 // --- DICIONÁRIO BLINDADO (Com variações da Bósnia) ---
 const TEAM_DICTIONARY: Record<string, string> = {
+  'curaçao': 'curacau',
+  'cape verde islands': 'cabo verde',
+  'republic of ireland': 'irlanda',
   'canada': 'canada', 'mexico': 'mexico', 'united states': 'estados unidos', 'usa': 'estados unidos',
   'panama': 'panama', 'curacao': 'curacau', 'haiti': 'haiti', 'egypt': 'egito', 'senegal': 'senegal',
   'south africa': 'africa do sul', 'cape verde': 'cabo verde', 'cabo verde': 'cabo verde', 'morocco': 'marrocos',
