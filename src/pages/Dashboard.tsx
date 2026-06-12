@@ -93,14 +93,14 @@ export default function Dashboard() {
       {/* LINHA DOS CARDS DOS JOGOS */}
       <div className="grid gap-6 lg:grid-cols-2">
         
-        {/* CARD 1: PRÓXIMAS PARTIDAS */}
-        <Card className="flex flex-col">
+        {/* CARD 1: AO VIVO E PRÓXIMAS */}
+        <Card className="flex flex-col border-primary/20">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
               <Calendar className="h-5 w-5 text-primary" />
-              Próximas Partidas
+              Ao Vivo & Próximas
             </CardTitle>
-            <CardDescription>Partidas dos próximos 3 dias</CardDescription>
+            <CardDescription>Partidas rolando agora e dos próximos 3 dias</CardDescription>
           </CardHeader>
           <CardContent className="flex-1">
             {upcomingMatches.length === 0 ? (
@@ -111,7 +111,7 @@ export default function Dashboard() {
             ) : (
               <div className="space-y-3">
                 {upcomingMatches.map((match) => (
-                  <div key={match.id} className="flex flex-col p-3 border rounded-lg bg-card hover:bg-muted/30 transition-colors">
+                  <div key={match.id} className={`flex flex-col p-3 border rounded-lg transition-colors ${match.status === 'in_progress' ? 'bg-red-500/5 border-red-500/20' : 'bg-card hover:bg-muted/30'}`}>
                     <div className="flex items-center justify-between mb-3 border-b pb-2">
                       <Badge variant="outline" className="text-xs">{getPhaseLabel(match.phase)}</Badge>
                       <div className="flex items-center gap-1 text-xs text-muted-foreground font-medium">
@@ -124,7 +124,19 @@ export default function Dashboard() {
                         <TeamFlag flagCode={match.home_team.flag_code} />
                         <span className="font-medium text-xs sm:text-sm text-center mt-1 truncate max-w-[80px] sm:max-w-[120px]">{match.home_team.name}</span>
                       </div>
-                      <span className="text-muted-foreground text-xs font-bold bg-muted px-2 py-1 rounded-md">X</span>
+                      
+                      {/* A MÁGICA DO PLACAR AO VIVO ACONTECE AQUI */}
+                      {match.status === 'in_progress' ? (
+                        <div className="flex flex-col items-center mx-2">
+                          <span className="text-lg sm:text-xl font-black text-red-500 tracking-widest bg-red-500/10 px-2 py-1 rounded-md border border-red-500/20">
+                            {match.home_score} - {match.away_score}
+                          </span>
+                          <span className="text-[10px] text-red-500 font-bold uppercase tracking-wider mt-1 animate-pulse">Ao Vivo</span>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground text-xs font-bold bg-muted px-2 py-1 rounded-md mx-2">X</span>
+                      )}
+
                       <div className="flex flex-col items-center flex-1">
                         <TeamFlag flagCode={match.away_team.flag_code} />
                         <span className="font-medium text-xs sm:text-sm text-center mt-1 truncate max-w-[80px] sm:max-w-[120px]">{match.away_team.name}</span>

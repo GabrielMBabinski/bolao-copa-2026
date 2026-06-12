@@ -16,7 +16,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   )
 }
 
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient<any>(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
@@ -128,9 +128,11 @@ export const matches = {
         home_team:teams!matches_home_team_id_fkey(*),
         away_team:teams!matches_away_team_id_fkey(*)
       `)
-      .gte('match_date', now.toISOString())
-      .lte('match_date', futureDate.toISOString())
+      // A MÁGICA AQUI: Puxa os jogos pendentes e os que estão rolando agora!
+      .in('status', ['pending', 'in_progress'])
+      .lte('match_date', futureDate.toISOString()) // Limita até X dias no futuro
       .order('match_date', { ascending: true })
+      
     return { data, error }
   },
 
