@@ -12,14 +12,14 @@ if (!supabaseUrl || !supabaseServiceKey || !footballDataToken) {
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-// --- DICIONÁRIO UNIVERSAL BLINDADO ---
+// --- DICIONÁRIO UNIVERSAL CORRIGIDO ---
 const TEAM_DICTIONARY: Record<string, string> = {
   'canada': 'canada', 'mexico': 'mexico', 'united states': 'estados unidos', 'usa': 'estados unidos',
   'panama': 'panama', 'curacao': 'curacau', 'haiti': 'haiti', 'egypt': 'egito', 'senegal': 'senegal',
   'south africa': 'africa do sul', 'cape verde': 'cabo verde', 'cabo verde': 'cabo verde', 'morocco': 'marrocos',
   'ivory coast': 'costa do marfim', "cote d'ivoire": 'costa do marfim', 'algeria': 'argelia', 'tunisia': 'tunisia',
-  'ghana': 'gana', 'dr congo': 'republica democratica do congo', 'congo dr': 'rd congo',
-  'argentina': 'argentina', 'ecuador': 'equador', 'colombia': 'colombia', 'uruguay': 'uruguai', 'brazil': 'brasil',
+  'ghana': 'gana', 'dr congo': 'rd congo', 'congo dr': 'rd congo', 'argentina': 'argentina', 
+  'ecuador': 'equador', 'colombia': 'colombia', 'uruguay': 'uruguai', 'brazil': 'brasil',
   'paraguay': 'paraguai', 'iran': 'ira', 'ir iran': 'ira', 'south korea': 'coreia do sul', 'korea republic': 'coreia do sul',
   'japan': 'japao', 'uzbekistan': 'uzbequistao', 'jordan': 'jordania', 'australia': 'australia', 'qatar': 'catar',
   'saudi arabia': 'arabia saudita', 'iraq': 'iraque', 'new zealand': 'nova zelandia', 'germany': 'alemanha',
@@ -27,7 +27,8 @@ const TEAM_DICTIONARY: Record<string, string> = {
   'netherlands': 'paises baixos', 'holland': 'paises baixos', 'austria': 'austria', 'norway': 'noruega',
   'belgium': 'belgica', 'england': 'inglaterra', 'croatia': 'croacia', 'bosnia and herzegovina': 'bosnia e herzegovina',
   'bosnia': 'bosnia e herzegovina', 'sweden': 'suecia', 'turkey': 'turquia', 'turkiye': 'turquia',
-  'czech republic': 'chequia', 'czechia': 'tchequia'
+  // CORREÇÃO AQUI: Traduzindo exatamente como está no seu banco
+  'czech republic': 'republica tcheca', 'czechia': 'republica tcheca'
 }
 
 const normalizeName = (name: string) => {
@@ -46,7 +47,7 @@ const translateApiName = (apiName: string): string => {
 }
 
 async function updateMatches() {
-  console.log('Iniciando sincronização automática com a API (Modo Blindado)...')
+  console.log('Iniciando sincronização automática com a API...')
   
   try {
     const response = await fetch(
@@ -75,7 +76,7 @@ async function updateMatches() {
 
       let dbMatch = dbMatches?.find((m: any) => m.api_id === apiId)
 
-      // SE NÃO TEM ID AINDA: Faz o casamento automático
+      // Casamento Automático
       if (!dbMatch) {
         dbMatch = dbMatches?.find((m: any) => {
           const mHome = normalizeName(getTeamName(m.home_team))
@@ -83,8 +84,6 @@ async function updateMatches() {
           
           if (!mHome || !mAway || !translatedHome || !translatedAway) return false;
 
-          // A MÁGICA: Removida a verificação de data! 
-          // Basta os nomes dos dois times baterem em qualquer ordem.
           return (
             (mHome.includes(translatedHome) || translatedHome.includes(mHome)) &&
             (mAway.includes(translatedAway) || translatedAway.includes(mAway))
@@ -98,10 +97,11 @@ async function updateMatches() {
         }
       }
 
-      // Atualiza o placar e dispara o ranking se necessário
+      // Atualiza o placar
       if (dbMatch) {
-        const homeScore = apiMatch.score?.fullTime?.home !== null ? apiMatch.score.fullTime.home : 0
-        const awayScore = apiMatch.score?.fullTime?.away !== null ? apiMatch.score.fullTime.away : 0
+        // CORREÇÃO: Agora respeitamos o null se o jogo ainda não aconteceu
+        const homeScore = apiMatch.score?.fullTime?.home ?? null
+        const awayScore = apiMatch.score?.fullTime?.away ?? null
         const apiStatus = apiMatch.status
 
         let dbStatus = 'pending'
@@ -114,14 +114,18 @@ async function updateMatches() {
           dbMatch.status !== dbStatus
 
         if (needsUpdate) {
-          console.log(`⚽ ATUALIZANDO: ${getTeamName(dbMatch.home_team)} x ${getTeamName(dbMatch.away_team)} | ${homeScore}-${awayScore} (${dbStatus})`)
+          console.log(`⚽ ATUALIZANDO: ${getTeamName(dbMatch.home_team)} x ${getTeamName(dbMatch.away_team)} | ${homeScore ?? 'nulo'}-${awayScore ?? 'nulo'} (${dbStatus})`)
           
           const { error: updateError } = await supabase
             .from('matches')
             .update({ home_score: homeScore, away_score: awayScore, status: dbStatus })
             .eq('id', dbMatch.id)
 
-          if (!updateError) updatedScores++
+          if (updateError) {
+             console.error(`❌ ERRO NO BANCO para o jogo ${apiId}: ${updateError.message}`)
+          } else {
+             updatedScores++
+          }
         }
       }
     }
