@@ -12,7 +12,7 @@ if (!supabaseUrl || !supabaseServiceKey || !footballDataToken) {
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-// --- DICIONÁRIO UNIVERSAL CORRIGIDO ---
+// --- DICIONÁRIO BLINDADO (Com variações da Bósnia) ---
 const TEAM_DICTIONARY: Record<string, string> = {
   'canada': 'canada', 'mexico': 'mexico', 'united states': 'estados unidos', 'usa': 'estados unidos',
   'panama': 'panama', 'curacao': 'curacau', 'haiti': 'haiti', 'egypt': 'egito', 'senegal': 'senegal',
@@ -25,10 +25,15 @@ const TEAM_DICTIONARY: Record<string, string> = {
   'saudi arabia': 'arabia saudita', 'iraq': 'iraque', 'new zealand': 'nova zelandia', 'germany': 'alemanha',
   'switzerland': 'suica', 'scotland': 'escocia', 'france': 'franca', 'spain': 'espanha', 'portugal': 'portugal',
   'netherlands': 'paises baixos', 'holland': 'paises baixos', 'austria': 'austria', 'norway': 'noruega',
-  'belgium': 'belgica', 'england': 'inglaterra', 'croatia': 'croacia', 'bosnia and herzegovina': 'bosnia e herzegovina',
-  'bosnia': 'bosnia e herzegovina', 'sweden': 'suecia', 'turkey': 'turquia', 'turkiye': 'turquia',
-  // CORREÇÃO AQUI: Traduzindo exatamente como está no seu banco
-  'czech republic': 'republica tcheca', 'czechia': 'republica tcheca'
+  'belgium': 'belgica', 'england': 'inglaterra', 'croatia': 'croacia', 'turkey': 'turquia', 'turkiye': 'turquia',
+  'czech republic': 'republica tcheca', 'czechia': 'republica tcheca', 'sweden': 'suecia',
+  
+  // O Arsenal contra a Bósnia:
+  'bosnia and herzegovina': 'bosnia e herzegovina',
+  'bosnia-herzegovina': 'bosnia e herzegovina',
+  'bosnia & herzegovina': 'bosnia e herzegovina',
+  'bosnia': 'bosnia e herzegovina',
+  'bih': 'bosnia e herzegovina'
 }
 
 const normalizeName = (name: string) => {
@@ -71,8 +76,11 @@ async function updateMatches() {
 
     for (const apiMatch of apiMatches) {
       const apiId = apiMatch.id
-      const translatedHome = translateApiName(apiMatch.homeTeam?.name || '')
-      const translatedAway = translateApiName(apiMatch.awayTeam?.name || '')
+      const rawApiHome = apiMatch.homeTeam?.name || ''
+      const rawApiAway = apiMatch.awayTeam?.name || ''
+      
+      const translatedHome = translateApiName(rawApiHome)
+      const translatedAway = translateApiName(rawApiAway)
 
       let dbMatch = dbMatches?.find((m: any) => m.api_id === apiId)
 
@@ -94,12 +102,14 @@ async function updateMatches() {
           console.log(`🔗 AUTO-LINK: Casando [${getTeamName(dbMatch.home_team)} x ${getTeamName(dbMatch.away_team)}] -> API ID: ${apiId}`)
           await supabase.from('matches').update({ api_id: apiId }).eq('id', dbMatch.id)
           linkedIDs++
+        } else {
+          // RADAR DE JOGOS PERDIDOS: Se não casar, ele dedura o nome!
+          console.log(`⚠️ Jogo da API não encontrado no seu banco: ${rawApiHome} x ${rawApiAway}`)
         }
       }
 
       // Atualiza o placar
       if (dbMatch) {
-        // CORREÇÃO: Agora respeitamos o null se o jogo ainda não aconteceu
         const homeScore = apiMatch.score?.fullTime?.home ?? null
         const awayScore = apiMatch.score?.fullTime?.away ?? null
         const apiStatus = apiMatch.status
@@ -121,11 +131,7 @@ async function updateMatches() {
             .update({ home_score: homeScore, away_score: awayScore, status: dbStatus })
             .eq('id', dbMatch.id)
 
-          if (updateError) {
-             console.error(`❌ ERRO NO BANCO para o jogo ${apiId}: ${updateError.message}`)
-          } else {
-             updatedScores++
-          }
+          if (!updateError) updatedScores++
         }
       }
     }
