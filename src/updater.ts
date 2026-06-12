@@ -134,7 +134,12 @@ async function updateMatches() {
             .update({ home_score: homeScore, away_score: awayScore, status: dbStatus })
             .eq('id', dbMatch.id)
 
-          if (!updateError) updatedScores++
+          // AGORA O ROBÔ VAI GRITAR SE O BANCO BLOQUEAR ALGO!
+          if (updateError) {
+             console.error(`❌ ERRO NO BANCO para o jogo ${apiId}: ${updateError.message}`)
+          } else {
+             updatedScores++
+          }
         }
       }
     }
