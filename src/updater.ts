@@ -14,11 +14,13 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
 // --- DICIONÁRIO BLINDADO (Com variações da Bósnia) ---
 const TEAM_DICTIONARY: Record<string, string> = {
-  'curaçao': 'curacau',
+  'netherlands': 'holanda',
+  'curaçao': 'curacao',
+  'curacao': 'curacao',
   'cape verde islands': 'cabo verde',
   'republic of ireland': 'irlanda',
   'canada': 'canada', 'mexico': 'mexico', 'united states': 'estados unidos', 'usa': 'estados unidos',
-  'panama': 'panama', 'curacao': 'curacau', 'haiti': 'haiti', 'egypt': 'egito', 'senegal': 'senegal',
+  'panama': 'panama', 'haiti': 'haiti', 'egypt': 'egito', 'senegal': 'senegal',
   'south africa': 'africa do sul', 'cape verde': 'cabo verde', 'cabo verde': 'cabo verde', 'morocco': 'marrocos',
   'ivory coast': 'costa do marfim', "cote d'ivoire": 'costa do marfim', 'algeria': 'argelia', 'tunisia': 'tunisia',
   'ghana': 'gana', 'dr congo': 'rd congo', 'congo dr': 'rd congo', 'argentina': 'argentina', 
@@ -27,7 +29,7 @@ const TEAM_DICTIONARY: Record<string, string> = {
   'japan': 'japao', 'uzbekistan': 'uzbequistao', 'jordan': 'jordania', 'australia': 'australia', 'qatar': 'catar',
   'saudi arabia': 'arabia saudita', 'iraq': 'iraque', 'new zealand': 'nova zelandia', 'germany': 'alemanha',
   'switzerland': 'suica', 'scotland': 'escocia', 'france': 'franca', 'spain': 'espanha', 'portugal': 'portugal',
-  'netherlands': 'paises baixos', 'holland': 'paises baixos', 'austria': 'austria', 'norway': 'noruega',
+  'holland': 'paises baixos', 'austria': 'austria', 'norway': 'noruega',
   'belgium': 'belgica', 'england': 'inglaterra', 'croatia': 'croacia', 'turkey': 'turquia', 'turkiye': 'turquia',
   'czech republic': 'republica tcheca', 'czechia': 'republica tcheca', 'sweden': 'suecia',
   
