@@ -46,7 +46,8 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen bg-background">
-      <nav className="border-b bg-card">
+      {/* A MÁGICA ACONTECE AQUI: sticky, top-0, z-50 e o efeito de vidro (backdrop-blur) */}
+      <nav className="sticky top-0 z-50 w-full border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60">
         <div className="container mx-auto px-4">
           <div className="flex h-16 items-center justify-between">
             
@@ -105,7 +106,6 @@ export default function Layout() {
 
             {/* BOTÃO HAMBÚRGUER (Visível no Celular, Escondido no Desktop) */}
             <div className="md:hidden flex items-center space-x-2">
-              {/* Deixei o botão de modo escuro visível fora do menu hambúrguer por usabilidade */}
               <button 
                 onClick={() => setIsDark(!isDark)} 
                 className="p-2 rounded-full hover:bg-muted transition-colors"
@@ -125,7 +125,7 @@ export default function Layout() {
 
         {/* MENU DROPDOWN DO CELULAR */}
         {isMobileMenuOpen && (
-          <div className="md:hidden border-t bg-card px-4 py-4 space-y-3">
+          <div className="md:hidden border-t bg-card px-4 py-4 space-y-3 shadow-lg">
             <div className="flex flex-col space-y-2">
               {navItems.map((item) => {
                 const Icon = item.icon
@@ -134,7 +134,7 @@ export default function Layout() {
                   <Link
                     key={item.path}
                     to={item.path}
-                    onClick={() => setIsMobileMenuOpen(false)} // Fecha o menu ao clicar
+                    onClick={() => setIsMobileMenuOpen(false)}
                     className={`flex items-center space-x-2 px-3 py-3 rounded-md text-base font-medium transition-colors ${
                       isActive
                         ? 'bg-primary text-primary-foreground'
