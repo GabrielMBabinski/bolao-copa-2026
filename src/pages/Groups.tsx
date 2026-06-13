@@ -76,7 +76,6 @@ export default function Groups() {
         </p>
       </div>
 
-      {/* A classe grid já está perfeitamente responsiva aqui! */}
       <div className="grid gap-4 sm:gap-6 md:grid-cols-2 xl:grid-cols-3">
         {allStandings.map(({ group, data }) => {
           const safeData = data || []
@@ -92,15 +91,14 @@ export default function Groups() {
                 </CardDescription>
               </CardHeader>
               
-              {/* Diminuímos o padding horizontal (px-2) apenas no celular para caber mais tabela */}
               <CardContent className="px-2 sm:px-6">
                 {safeData.length === 0 ? (
                   <p className="text-center text-muted-foreground py-4 text-sm">
                     Nenhuma partida realizada ainda
                   </p>
                 ) : (
-                  /* A MÁGICA DA ROLAGEM ACONTECE NESTA DIV ABAIXO */
-<div className="w-full pb-2 [&>div]:no-scrollbar">
+                  /* AGORA USAMOS A BARRA ESCURA E FINA EM VEZ DE ESCONDER */
+                  <div className="w-full pb-2 [&_div]:dark-scrollbar [&_div]:overflow-x-auto">
                     <Table className="min-w-[450px]">
                       <TableHeader>
                         <TableRow>

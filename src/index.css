@@ -70,4 +70,22 @@
     -ms-overflow-style: none;  /* IE and Edge */
     scrollbar-width: none;  /* Firefox */
   }
+  /* NOVA: Barra fina e elegante para tabelas horizontais */
+  .dark-scrollbar::-webkit-scrollbar {
+    height: 6px;
+  }
+  .dark-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .dark-scrollbar::-webkit-scrollbar-thumb {
+    background-color: #334155; /* Cor que combina com o fundo escuro */
+    border-radius: 10px;
+  }
+  .dark-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: #475569;
+  }
+  .dark-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #334155 transparent;
+  }
 }
