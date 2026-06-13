@@ -15,7 +15,10 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [paymentLoading, setPaymentLoading] = useState(false)
   
-  // Âncora para a rolagem suave
+  // Novo estado para saber se a caixa do PIX está na tela
+  const [isPaymentVisible, setIsPaymentVisible] = useState(false)
+  
+  // Âncora para a rolagem e observador
   const paymentSectionRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -37,6 +40,26 @@ export default function Dashboard() {
 
     loadData()
   }, [])
+
+  // Efeito do "Radar" (Intersection Observer)
+  useEffect(() => {
+    const currentRef = paymentSectionRef.current;
+    if (!currentRef) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        // Se pelo menos 30% da caixa do PIX aparecer na tela, esconde o botão
+        setIsPaymentVisible(entry.isIntersecting);
+      },
+      { threshold: 0.3 } 
+    );
+
+    observer.observe(currentRef);
+
+    return () => {
+      observer.unobserve(currentRef);
+    };
+  }, [allUsers, profile]); // Re-executa quando os dados carregam
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
@@ -60,13 +83,12 @@ export default function Dashboard() {
     setPaymentLoading(true);
     await profiles.notifyPayment(profile.id);
     
-    // Atualiza a lista na hora para a tela reagir
     const { data } = await profiles.getAllProfiles();
     if (data) setAllUsers(data);
     setPaymentLoading(false);
   }
 
-  // Função que executa a rolagem até a âncora
+  // Função que executa a rolagem centralizando o conteúdo
   const scrollToPayment = () => {
     paymentSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
@@ -243,7 +265,6 @@ export default function Dashboard() {
                 <h3 className="font-bold text-lg">Valide sua participação!</h3>
                 <p className="text-sm text-muted-foreground">Escaneie o QR Code ou use a chave PIX abaixo.</p>
                 
-                {/* Imagem do QR Code - Basta colocar um qrcode.png na pasta public */}
                 <div className="flex justify-center my-4">
                   <div className="w-40 h-40 bg-white p-2 rounded-lg border-2 border-dashed border-primary flex items-center justify-center overflow-hidden hover:scale-105 transition-transform">
                     <img src="/pix.png" alt="QR Code PIX R$ 15,00" className="w-full h-full object-contain" />
@@ -284,14 +305,14 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* CARD DA LISTA DE QUEM PAGOU */}
+        {/* CARD DA LISTA DE QUEM PAGOU COM BARRA DE ROLAGEM INVISÍVEL */}
         <Card className="flex flex-col">
           <CardHeader>
             <CardTitle className="text-lg">Status dos Participantes</CardTitle>
             <CardDescription>Quem já garantiu a vaga no bolão</CardDescription>
           </CardHeader>
           <CardContent className="flex-1">
-            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+            <div className="space-y-3 max-h-[400px] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
               {allUsers.map((user) => (
                 <div key={user.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/30 transition-colors">
                   <div className="flex items-center gap-3">
@@ -321,11 +342,15 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* BOTÃO FLUTUANTE (Visível apenas se o usuário NÃO PAGOU) */}
+      {/* BOTÃO FLUTUANTE (Com animação de sumiço ativada pelo Radar) */}
       {myProfile?.payment_status === 'unpaid' && (
         <button
           onClick={scrollToPayment}
-          className="fixed bottom-6 right-6 md:bottom-8 md:right-8 z-50 flex items-center gap-2 bg-yellow-500 hover:bg-yellow-600 text-white px-5 py-3 sm:px-6 sm:py-4 rounded-full shadow-[0_0_20px_rgba(234,179,8,0.4)] transition-all hover:scale-105 hover:-translate-y-1 group"
+          className={`fixed bottom-6 right-6 md:bottom-8 md:right-8 z-50 flex items-center gap-2 bg-yellow-500 text-white px-5 py-3 sm:px-6 sm:py-4 rounded-full shadow-[0_0_20px_rgba(234,179,8,0.4)] transition-all duration-500 group ${
+            isPaymentVisible 
+              ? 'opacity-0 translate-y-10 pointer-events-none' 
+              : 'opacity-100 translate-y-0 hover:bg-yellow-600 hover:scale-105 hover:-translate-y-1'
+          }`}
         >
           <BadgeDollarSign className="h-5 w-5 sm:h-6 sm:w-6 animate-pulse" />
           <span className="font-black uppercase tracking-wide text-sm sm:text-base">Pagar Aposta</span>
