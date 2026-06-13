@@ -57,3 +57,17 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* =========================================
+   NOSSAS CLASSES CUSTOMIZADAS (UTILITIES)
+   ========================================= */
+@layer utilities {
+  /* Esconde a barra de rolagem mas mantém a funcionalidade de scroll */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+}

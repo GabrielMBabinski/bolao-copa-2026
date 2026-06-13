@@ -312,7 +312,7 @@ export default function Dashboard() {
             <CardDescription>Quem já garantiu a vaga no bolão</CardDescription>
           </CardHeader>
           <CardContent className="flex-1">
-            <div className="space-y-3 max-h-[400px] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+            <div className="overflow-x-auto w-full pb-2 no-scrollbar">
               {allUsers.map((user) => (
                 <div key={user.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/30 transition-colors">
                   <div className="flex items-center gap-3">
