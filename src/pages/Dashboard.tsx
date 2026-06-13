@@ -15,10 +15,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [paymentLoading, setPaymentLoading] = useState(false)
   
-  // Novo estado para saber se a caixa do PIX está na tela
   const [isPaymentVisible, setIsPaymentVisible] = useState(false)
-  
-  // Âncora para a rolagem e observador
   const paymentSectionRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -41,14 +38,12 @@ export default function Dashboard() {
     loadData()
   }, [])
 
-  // Efeito do "Radar" (Intersection Observer)
   useEffect(() => {
     const currentRef = paymentSectionRef.current;
     if (!currentRef) return;
 
     const observer = new IntersectionObserver(
       ([entry]) => {
-        // Se pelo menos 30% da caixa do PIX aparecer na tela, esconde o botão
         setIsPaymentVisible(entry.isIntersecting);
       },
       { threshold: 0.3 } 
@@ -59,7 +54,7 @@ export default function Dashboard() {
     return () => {
       observer.unobserve(currentRef);
     };
-  }, [allUsers, profile]); // Re-executa quando os dados carregam
+  }, [allUsers, profile]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
@@ -88,7 +83,6 @@ export default function Dashboard() {
     setPaymentLoading(false);
   }
 
-  // Função que executa a rolagem centralizando o conteúdo
   const scrollToPayment = () => {
     paymentSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
@@ -101,14 +95,12 @@ export default function Dashboard() {
     )
   }
 
-  // Cálculos financeiros
   const totalPrize = allUsers.filter(u => u.payment_status === 'paid').length * 15;
   const myProfile = allUsers.find(u => u.id === profile?.id);
 
   return (
     <div className="space-y-6 sm:space-y-8 max-w-6xl mx-auto relative">
       
-      {/* CABEÇALHO */}
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold mb-2 truncate">Bem-vindo, {profile?.name}!</h1>
         <p className="text-muted-foreground text-sm sm:text-base">
@@ -116,7 +108,6 @@ export default function Dashboard() {
         </p>
       </div>
 
-      {/* BANNER */}
       <div className="relative w-full h-40 sm:h-64 md:h-80 rounded-2xl overflow-hidden mb-8 shadow-xl border border-muted group">
         <img 
           src="/neymar-banner.jpg" 
@@ -134,9 +125,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ÁREA DE JOGOS (Cards lado a lado) */}
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* CARD 1: AO VIVO E PRÓXIMAS */}
         <Card className="flex flex-col border-primary/20">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
@@ -152,45 +141,50 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="space-y-3">
-                {upcomingMatches.map((match) => (
-                  <div key={match.id} className={`flex flex-col p-3 border rounded-lg transition-colors ${match.status === 'in_progress' ? 'bg-red-500/5 border-red-500/20' : 'bg-card hover:bg-muted/30'}`}>
-                    <div className="flex items-center justify-between mb-3 border-b pb-2">
-                      <Badge variant="outline" className="text-xs">{getPhaseLabel(match.phase)}</Badge>
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground font-medium">
-                        <Clock className="h-3 w-3" />
-                        {formatDate(match.match_date)}
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-center gap-2 sm:gap-4">
-                      <div className="flex flex-col items-center flex-1">
-                        <TeamFlag flagCode={match.home_team.flag_code} />
-                        <span className="font-medium text-xs sm:text-sm text-center mt-1 truncate max-w-[80px] sm:max-w-[120px]">{match.home_team.name}</span>
-                      </div>
-                      
-                      {match.status === 'in_progress' ? (
-                        <div className="flex flex-col items-center mx-2">
-                          <span className="text-lg sm:text-xl font-black text-red-500 tracking-widest bg-red-500/10 px-2 py-1 rounded-md border border-red-500/20">
-                            {match.home_score} - {match.away_score}
-                          </span>
-                          <span className="text-[10px] text-red-500 font-bold uppercase tracking-wider mt-1 animate-pulse">Ao Vivo</span>
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground text-xs font-bold bg-muted px-2 py-1 rounded-md mx-2">X</span>
-                      )}
+                {upcomingMatches.map((match) => {
+                  
+                  // Variável que checa se o jogo está rolando, blindando contra variações da API
+                  const isLive = ['in_progress', 'live', 'pending'].includes(match.status?.toLowerCase());
 
-                      <div className="flex flex-col items-center flex-1">
-                        <TeamFlag flagCode={match.away_team.flag_code} />
-                        <span className="font-medium text-xs sm:text-sm text-center mt-1 truncate max-w-[80px] sm:max-w-[120px]">{match.away_team.name}</span>
+                  return (
+                    <div key={match.id} className={`flex flex-col p-3 border rounded-lg transition-colors ${isLive ? 'bg-red-500/5 border-red-500/20' : 'bg-card hover:bg-muted/30'}`}>
+                      <div className="flex items-center justify-between mb-3 border-b pb-2">
+                        <Badge variant="outline" className="text-xs">{getPhaseLabel(match.phase)}</Badge>
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground font-medium">
+                          <Clock className="h-3 w-3" />
+                          {formatDate(match.match_date)}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-center gap-2 sm:gap-4">
+                        <div className="flex flex-col items-center flex-1">
+                          <TeamFlag flagCode={match.home_team.flag_code} />
+                          <span className="font-medium text-xs sm:text-sm text-center mt-1 truncate max-w-[80px] sm:max-w-[120px]">{match.home_team.name}</span>
+                        </div>
+                        
+                        {isLive ? (
+                          <div className="flex flex-col items-center mx-2">
+                            <span className="text-lg sm:text-xl font-black text-red-500 tracking-widest bg-red-500/10 px-2 py-1 rounded-md border border-red-500/20">
+                              {match.home_score ?? 0} - {match.away_score ?? 0}
+                            </span>
+                            <span className="text-[10px] text-red-500 font-bold uppercase tracking-wider mt-1 animate-pulse">Ao Vivo</span>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground text-xs font-bold bg-muted px-2 py-1 rounded-md mx-2">X</span>
+                        )}
+
+                        <div className="flex flex-col items-center flex-1">
+                          <TeamFlag flagCode={match.away_team.flag_code} />
+                          <span className="font-medium text-xs sm:text-sm text-center mt-1 truncate max-w-[80px] sm:max-w-[120px]">{match.away_team.name}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* CARD 2: ÚLTIMOS RESULTADOS */}
         <Card className="flex flex-col">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
@@ -236,14 +230,9 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* =========================================
-          NOVA SEÇÃO FINANCEIRA: PRÊMIO E PAGAMENTO 
-          ========================================= */}
       <div className="grid gap-6 lg:grid-cols-2 mt-8">
         
-        {/* CARD DO PRÊMIO E QR CODE */}
         <Card className="border-yellow-500/30 bg-gradient-to-br from-yellow-500/10 to-amber-600/5 shadow-lg flex flex-col relative overflow-hidden">
-          {/* Brilho de destaque sutil no card */}
           <div className="absolute top-0 right-0 -mr-16 -mt-16 w-32 h-32 rounded-full bg-yellow-500/20 blur-3xl pointer-events-none"></div>
           
           <CardHeader className="pb-2 border-b border-yellow-500/20">
@@ -259,7 +248,6 @@ export default function Dashboard() {
               <p className="text-muted-foreground mt-2 font-medium">Aposta: R$ 15,00 por participante</p>
             </div>
 
-            {/* SE O USUÁRIO AINDA NÃO PAGOU */}
             {myProfile?.payment_status === 'unpaid' && (
               <div ref={paymentSectionRef} className="bg-card border rounded-xl p-4 sm:p-6 text-center space-y-4 shadow-inner mt-auto">
                 <h3 className="font-bold text-lg">Valide sua participação!</h3>
@@ -285,7 +273,6 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* SE O USUÁRIO CLICOU EM "JÁ PAGUEI" */}
             {myProfile?.payment_status === 'pending' && (
               <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-6 text-center flex flex-col items-center mt-auto">
                 <Clock className="h-12 w-12 text-amber-500 mb-2 animate-pulse" />
@@ -294,7 +281,6 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* SE O ADMINISTRADOR VALIDOU O PAGAMENTO */}
             {myProfile?.payment_status === 'paid' && (
               <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-6 text-center flex flex-col items-center mt-auto">
                 <CheckCircle2 className="h-12 w-12 text-green-500 mb-2" />
@@ -305,14 +291,14 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* CARD DA LISTA DE QUEM PAGOU COM BARRA DE ROLAGEM INVISÍVEL */}
         <Card className="flex flex-col">
           <CardHeader>
             <CardTitle className="text-lg">Status dos Participantes</CardTitle>
             <CardDescription>Quem já garantiu a vaga no bolão</CardDescription>
           </CardHeader>
           <CardContent className="flex-1">
-            <div className="overflow-x-auto w-full pb-2 no-scrollbar">
+            {/* CORRIGIDO: CSS nativo de scroll vertical para listas em vez de horizontal */}
+            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 no-scrollbar">
               {allUsers.map((user) => (
                 <div key={user.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/30 transition-colors">
                   <div className="flex items-center gap-3">
@@ -342,7 +328,6 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* BOTÃO FLUTUANTE (Com animação de sumiço ativada pelo Radar) */}
       {myProfile?.payment_status === 'unpaid' && (
         <button
           onClick={scrollToPayment}

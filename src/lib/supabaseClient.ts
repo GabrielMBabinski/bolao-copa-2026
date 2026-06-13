@@ -145,9 +145,9 @@ export const matches = {
         home_team:teams!matches_home_team_id_fkey(*),
         away_team:teams!matches_away_team_id_fkey(*)
       `)
-      // A MÁGICA AQUI: Puxa os jogos pendentes e os que estão rolando agora!
-      .in('status', ['pending', 'in_progress'])
-      .lte('match_date', futureDate.toISOString()) // Limita até X dias no futuro
+      // BLINDADO: Puxa qualquer status que signifique "agendado" ou "rolando"
+      .in('status', ['scheduled', 'pending', 'in_progress', 'live', 'in_play'])
+      .lte('match_date', futureDate.toISOString())
       .order('match_date', { ascending: true })
       
     return { data, error }
