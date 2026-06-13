@@ -1,29 +1,39 @@
 import { useEffect, useState } from 'react'
-import { ranking } from '@/lib/supabaseClient'
+import { ranking, profiles } from '@/lib/supabaseClient' // Adicionamos o profiles aqui
 import type { Profile } from '@/types/database'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { Trophy, Medal, Award } from 'lucide-react'
+import { Trophy, Medal, Award, BadgeDollarSign } from 'lucide-react' // Adicionamos o BadgeDollarSign
 
 export default function Ranking() {
   const [leaderboard, setLeaderboard] = useState<Profile[]>([])
+  const [allUsers, setAllUsers] = useState<any[]>([]) // Estado para calcular o dinheiro
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    async function loadLeaderboard() {
+    async function loadData() {
       try {
-        const { data } = await ranking.getLeaderboard()
-        setLeaderboard(data || [])
+        // Puxa o ranking e a lista de pagamentos ao mesmo tempo
+        const [rankingResponse, profilesResponse] = await Promise.all([
+          ranking.getLeaderboard(),
+          profiles.getAllProfiles()
+        ])
+        
+        setLeaderboard(rankingResponse.data || [])
+        setAllUsers(profilesResponse.data || [])
       } catch (error) {
-        console.error('Erro ao carregar ranking:', error)
+        console.error('Erro ao carregar dados do ranking:', error)
       } finally {
         setLoading(false)
       }
     }
 
-    loadLeaderboard()
+    loadData()
   }, [])
+
+  // Calcula o prêmio baseado em quem está com status 'paid'
+  const totalPrize = allUsers.filter(u => u.payment_status === 'paid').length * 15
 
   const getRankIcon = (rank: number) => {
     if (rank === 1) return <Trophy className="h-5 w-5 text-yellow-500" />
@@ -42,7 +52,7 @@ export default function Ranking() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-lg">Carregando...</div>
+        <div className="text-lg animate-pulse">Carregando Ranking...</div>
       </div>
     )
   }
@@ -50,13 +60,35 @@ export default function Ranking() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold mb-2">Ranking</h1>
+        <h1 className="text-3xl font-bold mb-2">Ranking Oficial</h1>
         <p className="text-muted-foreground">
           Veja quem está liderando o bolão da Copa do Mundo 2026
         </p>
       </div>
 
-      <Card>
+      {/* BANNER DO PRÊMIO ACUMULADO */}
+      {totalPrize > 0 && (
+        <div className="bg-gradient-to-r from-yellow-500/20 via-amber-500/10 to-transparent border border-yellow-500/30 rounded-xl p-4 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+          <div className="flex items-center gap-4">
+            <div className="bg-yellow-500/20 p-3 rounded-full shrink-0">
+              <BadgeDollarSign className="h-8 w-8 text-yellow-600" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-yellow-600/80 uppercase tracking-wider mb-1">
+                Prêmio Acumulado
+              </p>
+              <p className="text-3xl sm:text-4xl font-black text-yellow-600 leading-none">
+                R$ {totalPrize.toFixed(2).replace('.', ',')}
+              </p>
+            </div>
+          </div>
+          <div className="bg-yellow-500 text-white font-black px-4 py-2 rounded-lg text-sm sm:text-base uppercase tracking-wide shadow-md transform -rotate-2">
+            O 1º Lugar leva tudo!
+          </div>
+        </div>
+      )}
+
+      <Card className="border-t-4 border-t-primary shadow-md">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Trophy className="h-5 w-5" />
@@ -73,92 +105,126 @@ export default function Ranking() {
               <p>Nenhum participante no ranking ainda</p>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-16">Posição</TableHead>
-                  <TableHead>Participante</TableHead>
-                  <TableHead className="text-center">Pontos</TableHead>
-                  <TableHead className="text-center">Placares Exatos</TableHead>
-                  <TableHead className="text-center">Taxa de Acerto</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {leaderboard.map((profile, index) => {
-                  const rank = index + 1
-                  const accuracy = profile.total_points > 0
-                    ? ((profile.exact_scores / profile.total_points) * 100).toFixed(1)
-                    : '0'
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="w-16">Posição</TableHead>
+                    <TableHead>Participante</TableHead>
+                    <TableHead className="text-center">Pontos</TableHead>
+                    <TableHead className="text-center hidden sm:table-cell">Placares Exatos</TableHead>
+                    <TableHead className="text-center hidden sm:table-cell">Taxa de Acerto</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {leaderboard.map((profile, index) => {
+                    const rank = index + 1
+                    const accuracy = profile.total_points > 0
+                      ? ((profile.exact_scores / profile.total_points) * 100).toFixed(1)
+                      : '0'
 
-                  return (
-                    <TableRow key={profile.id}>
-                      <TableCell>
-                        <div className="flex items-center justify-center">
-                          {getRankIcon(rank)}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center gap-2">
-                            {getRankBadge(rank)}
+                    // Verifica se a pessoa no loop atual pagou para destacá-la
+                    const userPaymentStatus = allUsers.find(u => u.id === profile.id)?.payment_status
+
+                    return (
+                      <TableRow 
+                        key={profile.id} 
+                        className={rank === 1 ? 'bg-yellow-500/5 hover:bg-yellow-500/10 transition-colors' : ''}
+                      >
+                        <TableCell>
+                          <div className="flex items-center justify-center">
+                            {getRankIcon(rank)}
                           </div>
-                          <div>
-                            <div className="font-medium">{profile.name}</div>
-                            {profile.is_admin && (
-                              <Badge variant="outline" className="text-xs mt-1">
-                                Admin
-                              </Badge>
-                            )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                            <div className="flex items-center gap-2 shrink-0">
+                              {getRankBadge(rank)}
+                            </div>
+                            <div className="flex flex-col items-start">
+                              <div className="font-bold text-base flex items-center gap-2">
+                                {profile.name}
+                                
+                                {/* TAG DO VENCEDOR NA LINHA DO PRIMEIRO COLOCADO */}
+                                {rank === 1 && totalPrize > 0 && (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-black text-yellow-700 bg-yellow-400 px-2 py-0.5 rounded-full uppercase shadow-sm">
+                                    <BadgeDollarSign className="h-3 w-3" />
+                                    Leva os R$ {totalPrize.toFixed(2).replace('.', ',')}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex gap-2 items-center mt-1">
+                                {profile.is_admin && (
+                                  <Badge variant="outline" className="text-[10px] h-4">Admin</Badge>
+                                )}
+                                {userPaymentStatus === 'paid' && rank !== 1 && (
+                                  <span className="text-[10px] font-medium text-green-600 flex items-center gap-1">
+                                    Aposta Paga
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <span className="text-2xl font-bold text-primary">
-                          {profile.total_points}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <span className="font-medium">{profile.exact_scores}</span>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <span className="text-muted-foreground">{accuracy}%</span>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <span className={`text-2xl font-black ${rank === 1 ? 'text-yellow-600' : 'text-primary'}`}>
+                            {profile.total_points}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-center hidden sm:table-cell">
+                          <span className="font-bold bg-muted px-2 py-1 rounded-md">{profile.exact_scores}</span>
+                        </TableCell>
+                        <TableCell className="text-center hidden sm:table-cell">
+                          <span className="text-sm font-medium text-muted-foreground">{accuracy}%</span>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">Total de Participantes</CardTitle>
+      <div className="grid gap-4 md:grid-cols-4 mt-6">
+        <Card className="bg-yellow-500/10 border-yellow-500/20">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-bold uppercase text-yellow-600">Prêmio Atual</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{leaderboard.length}</div>
+            <div className="text-2xl font-black text-yellow-600">
+              R$ {totalPrize.toFixed(2).replace('.', ',')}
+            </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">Maior Pontuação</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-bold uppercase text-muted-foreground">Participantes</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">
+            <div className="text-2xl font-black">{leaderboard.length}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-bold uppercase text-muted-foreground">Maior Pontuação</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-black text-primary">
               {leaderboard.length > 0 ? leaderboard[0].total_points : 0}
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">Mais Placares Exatos</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-bold uppercase text-muted-foreground">Placares Exatos (Recorde)</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">
+            <div className="text-2xl font-black text-primary">
               {leaderboard.length > 0
                 ? Math.max(...leaderboard.map(p => p.exact_scores))
                 : 0}
