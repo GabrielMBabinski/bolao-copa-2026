@@ -68,7 +68,7 @@ export default function Dashboard() {
 
   // Função que executa a rolagem até a âncora
   const scrollToPayment = () => {
-    paymentSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    paymentSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 
   if (loading) {
@@ -217,7 +217,7 @@ export default function Dashboard() {
       {/* =========================================
           NOVA SEÇÃO FINANCEIRA: PRÊMIO E PAGAMENTO 
           ========================================= */}
-      <div ref={paymentSectionRef} className="grid gap-6 lg:grid-cols-2 mt-8 scroll-mt-24">
+      <div className="grid gap-6 lg:grid-cols-2 mt-8">
         
         {/* CARD DO PRÊMIO E QR CODE */}
         <Card className="border-yellow-500/30 bg-gradient-to-br from-yellow-500/10 to-amber-600/5 shadow-lg flex flex-col relative overflow-hidden">
@@ -239,7 +239,7 @@ export default function Dashboard() {
 
             {/* SE O USUÁRIO AINDA NÃO PAGOU */}
             {myProfile?.payment_status === 'unpaid' && (
-              <div className="bg-card border rounded-xl p-4 sm:p-6 text-center space-y-4 shadow-inner mt-auto">
+              <div ref={paymentSectionRef} className="bg-card border rounded-xl p-4 sm:p-6 text-center space-y-4 shadow-inner mt-auto">
                 <h3 className="font-bold text-lg">Valide sua participação!</h3>
                 <p className="text-sm text-muted-foreground">Escaneie o QR Code ou use a chave PIX abaixo.</p>
                 
