@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react'
-import { ranking, profiles } from '@/lib/supabaseClient' // Adicionamos o profiles aqui
+import { ranking, profiles } from '@/lib/supabaseClient' 
 import type { Profile } from '@/types/database'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { Trophy, Medal, Award, BadgeDollarSign } from 'lucide-react' // Adicionamos o BadgeDollarSign
+import { Trophy, Medal, Award, BadgeDollarSign } from 'lucide-react' 
 
 export default function Ranking() {
   const [leaderboard, setLeaderboard] = useState<Profile[]>([])
-  const [allUsers, setAllUsers] = useState<any[]>([]) // Estado para calcular o dinheiro
+  const [allUsers, setAllUsers] = useState<any[]>([]) 
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -113,15 +113,11 @@ export default function Ranking() {
                     <TableHead>Participante</TableHead>
                     <TableHead className="text-center">Pontos</TableHead>
                     <TableHead className="text-center hidden sm:table-cell">Placares Exatos</TableHead>
-                    <TableHead className="text-center hidden sm:table-cell">Taxa de Acerto</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {leaderboard.map((profile, index) => {
                     const rank = index + 1
-                    const accuracy = profile.total_points > 0
-                      ? ((profile.exact_scores / profile.total_points) * 100).toFixed(1)
-                      : '0'
 
                     // Verifica se a pessoa no loop atual pagou para destacá-la
                     const userPaymentStatus = allUsers.find(u => u.id === profile.id)?.payment_status
@@ -173,9 +169,6 @@ export default function Ranking() {
                         </TableCell>
                         <TableCell className="text-center hidden sm:table-cell">
                           <span className="font-bold bg-muted px-2 py-1 rounded-md">{profile.exact_scores}</span>
-                        </TableCell>
-                        <TableCell className="text-center hidden sm:table-cell">
-                          <span className="text-sm font-medium text-muted-foreground">{accuracy}%</span>
                         </TableCell>
                       </TableRow>
                     )
