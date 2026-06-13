@@ -143,8 +143,16 @@ export default function Dashboard() {
               <div className="space-y-3">
                 {upcomingMatches.map((match) => {
                   
-                  // Variável que checa se o jogo está rolando, blindando contra variações da API
-                  const isLive = ['in_progress', 'live', 'pending'].includes(match.status?.toLowerCase());
+                  // ==========================================
+                  // A NOVA LÓGICA BLINDADA COM RELÓGIO
+                  // ==========================================
+                  const now = new Date();
+                  const matchTime = new Date(match.match_date);
+                  const status = match.status?.toLowerCase() || '';
+
+                  // É "Ao Vivo" se a API disser explicitamente OU se estiver pendente mas a hora já passou
+                  const isLive = ['in_progress', 'live', 'in_play'].includes(status) || 
+                                 (['pending', 'scheduled'].includes(status) && now >= matchTime);
 
                   return (
                     <div key={match.id} className={`flex flex-col p-3 border rounded-lg transition-colors ${isLive ? 'bg-red-500/5 border-red-500/20' : 'bg-card hover:bg-muted/30'}`}>
@@ -297,7 +305,6 @@ export default function Dashboard() {
             <CardDescription>Quem já garantiu a vaga no bolão</CardDescription>
           </CardHeader>
           <CardContent className="flex-1">
-            {/* CORRIGIDO: CSS nativo de scroll vertical para listas em vez de horizontal */}
             <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 no-scrollbar">
               {allUsers.map((user) => (
                 <div key={user.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/30 transition-colors">
