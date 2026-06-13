@@ -136,6 +136,8 @@ export const matches = {
 
   getUpcoming: async (days: number = 3) => {
     const now = new Date()
+    // Subtrai 4 horas do momento atual para garantir que o jogo não suma da tela enquanto está rolando e o fuso horário varia
+    const pastDate = new Date(now.getTime() - 4 * 60 * 60 * 1000)
     const futureDate = new Date(now.getTime() + days * 24 * 60 * 60 * 1000)
     
     const { data, error } = await supabase
@@ -145,9 +147,10 @@ export const matches = {
         home_team:teams!matches_home_team_id_fkey(*),
         away_team:teams!matches_away_team_id_fkey(*)
       `)
-      // BLINDADO: Puxa qualquer status que signifique "agendado" ou "rolando"
-      .in('status', ['scheduled', 'pending', 'in_progress', 'live', 'in_play'])
-      .lte('match_date', futureDate.toISOString())
+      // A MÁGICA INVERTIDA: Pega absolutamente tudo que NÃO estiver com status 'finished'
+      .neq('status', 'finished')
+      .gte('match_date', pastDate.toISOString()) // De 4 horas atrás...
+      .lte('match_date', futureDate.toISOString()) // ...Até X dias no futuro
       .order('match_date', { ascending: true })
       
     return { data, error }
