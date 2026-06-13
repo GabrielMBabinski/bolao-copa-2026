@@ -82,6 +82,23 @@ export const profiles = {
       .single()
     return { data, error }
   },
+  // NOVA FUNÇÃO: Puxa todos os perfis para a lista de pagamentos
+  getAllProfiles: async () => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .order('name', { ascending: true })
+    return { data, error }
+  },
+  
+  // NOVA FUNÇÃO: Muda o status para pendente quando o usuário clica que pagou
+  notifyPayment: async (userId: string) => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({ payment_status: 'pending' })
+      .eq('id', userId)
+    return { data, error }
+  }
 }
 
 // Funções helper para teams

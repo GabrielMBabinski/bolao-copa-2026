@@ -1,56 +1,66 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/hooks/useAuth'
-import { matches } from '@/lib/supabaseClient'
+import { matches, profiles } from '@/lib/supabaseClient'
 import type { MatchWithTeams } from '@/types/database'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Calendar, Clock, Trophy } from 'lucide-react'
+import { Calendar, Clock, Trophy, BadgeDollarSign, CheckCircle2 } from 'lucide-react'
 import TeamFlag from '@/components/TeamFlag'
 
 export default function Dashboard() {
   const { profile } = useAuth()
   const [upcomingMatches, setUpcomingMatches] = useState<MatchWithTeams[]>([])
   const [finishedMatches, setFinishedMatches] = useState<MatchWithTeams[]>([])
+  const [allUsers, setAllUsers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [paymentLoading, setPaymentLoading] = useState(false)
 
   useEffect(() => {
-    async function loadMatches() {
+    async function loadData() {
       try {
         const { data: upcoming } = await matches.getUpcoming(3)
         const { data: finished } = await matches.getFinished(5)
+        const { data: usersData } = await profiles.getAllProfiles()
+        
         setUpcomingMatches(upcoming || [])
         setFinishedMatches(finished || [])
+        setAllUsers(usersData || [])
       } catch (error) {
-        console.error('Erro ao carregar partidas:', error)
+        console.error('Erro ao carregar dados:', error)
       } finally {
         setLoading(false)
       }
     }
 
-    loadMatches()
+    loadData()
   }, [])
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
     return date.toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
     })
   }
 
   const getPhaseLabel = (phase: string) => {
     const labels: Record<string, string> = {
-      group: 'Fase de Grupos',
-      round_32: 'Dezesseis-avos',
-      round_16: 'Oitavas de Final',
-      quarter: 'Quartas de Final',
-      semi: 'Semifinais',
-      final: 'Final',
+      group: 'Fase de Grupos', round_32: 'Dezesseis-avos',
+      round_16: 'Oitavas de Final', quarter: 'Quartas de Final',
+      semi: 'Semifinais', final: 'Final',
     }
     return labels[phase] || phase
+  }
+
+  const handleNotifyPayment = async () => {
+    if (!profile?.id) return;
+    setPaymentLoading(true);
+    await profiles.notifyPayment(profile.id);
+    
+    // Atualiza a lista na hora para a tela reagir
+    const { data } = await profiles.getAllProfiles();
+    if (data) setAllUsers(data);
+    setPaymentLoading(false);
   }
 
   if (loading) {
@@ -61,18 +71,22 @@ export default function Dashboard() {
     )
   }
 
+  // Cálculos financeiros
+  const totalPrize = allUsers.filter(u => u.payment_status === 'paid').length * 15;
+  const myProfile = allUsers.find(u => u.id === profile?.id);
+
   return (
     <div className="space-y-6 sm:space-y-8 max-w-6xl mx-auto">
       
-      {/* CABEÇALHO DE BOAS VINDAS */}
+      {/* CABEÇALHO */}
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold mb-2 truncate">Bem-vindo, {profile?.name}!</h1>
         <p className="text-muted-foreground text-sm sm:text-base">
-          Acompanhe as próximas partidas e os resultados mais recentes
+          Acompanhe as partidas, resultados e o prêmio acumulado
         </p>
       </div>
 
-      {/* BANNER DO NEYMAR (O Ícone Épico) */}
+      {/* BANNER */}
       <div className="relative w-full h-40 sm:h-64 md:h-80 rounded-2xl overflow-hidden mb-8 shadow-xl border border-muted group">
         <img 
           src="/neymar-banner.jpg" 
@@ -90,15 +104,13 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* LINHA DOS CARDS DOS JOGOS */}
+      {/* ÁREA DE JOGOS (Cards lado a lado) */}
       <div className="grid gap-6 lg:grid-cols-2">
-        
         {/* CARD 1: AO VIVO E PRÓXIMAS */}
         <Card className="flex flex-col border-primary/20">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
-              <Calendar className="h-5 w-5 text-primary" />
-              Ao Vivo & Próximas
+              <Calendar className="h-5 w-5 text-primary" /> Ao Vivo & Próximas
             </CardTitle>
             <CardDescription>Partidas rolando agora e dos próximos 3 dias</CardDescription>
           </CardHeader>
@@ -125,7 +137,6 @@ export default function Dashboard() {
                         <span className="font-medium text-xs sm:text-sm text-center mt-1 truncate max-w-[80px] sm:max-w-[120px]">{match.home_team.name}</span>
                       </div>
                       
-                      {/* A MÁGICA DO PLACAR AO VIVO ACONTECE AQUI */}
                       {match.status === 'in_progress' ? (
                         <div className="flex flex-col items-center mx-2">
                           <span className="text-lg sm:text-xl font-black text-red-500 tracking-widest bg-red-500/10 px-2 py-1 rounded-md border border-red-500/20">
@@ -153,8 +164,7 @@ export default function Dashboard() {
         <Card className="flex flex-col">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
-              <Trophy className="h-5 w-5 text-primary" />
-              Últimos Resultados
+              <Trophy className="h-5 w-5 text-primary" /> Últimos Resultados
             </CardTitle>
             <CardDescription>Partidas finalizadas recentemente</CardDescription>
           </CardHeader>
@@ -196,33 +206,110 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* PAINEL DE PONTUAÇÃO DO JOGADOR */}
-      <Card className="border-primary/20 shadow-sm">
-        <CardHeader className="pb-4">
-          <CardTitle>Seus Estatísticas</CardTitle>
-          <CardDescription>Sua performance atual no ranking geral do bolão</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="flex flex-col items-center justify-center p-4 border rounded-xl bg-card hover:border-primary/50 transition-colors">
-              <div className="text-4xl sm:text-5xl font-black text-primary">{profile?.total_points || 0}</div>
-              <div className="text-sm font-medium text-muted-foreground mt-2 uppercase tracking-wide">Pontos Totais</div>
+      {/* =========================================
+          NOVA SEÇÃO FINANCEIRA: PRÊMIO E PAGAMENTO 
+          ========================================= */}
+      <div className="grid gap-6 lg:grid-cols-2 mt-8">
+        
+        {/* CARD DO PRÊMIO E QR CODE */}
+        <Card className="border-yellow-500/30 bg-gradient-to-br from-yellow-500/10 to-amber-600/5 shadow-lg flex flex-col">
+          <CardHeader className="pb-2 border-b border-yellow-500/20">
+            <CardTitle className="flex items-center gap-2 text-xl sm:text-2xl text-yellow-600 font-black uppercase">
+              <BadgeDollarSign className="h-6 w-6" /> Prêmio Acumulado
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-6 flex-1 flex flex-col justify-center">
+            <div className="flex flex-col items-center justify-center mb-6">
+              <span className="text-5xl sm:text-7xl font-black text-yellow-600 drop-shadow-md">
+                R$ {totalPrize.toFixed(2).replace('.', ',')}
+              </span>
+              <p className="text-muted-foreground mt-2 font-medium">Aposta: R$ 15,00 por participante</p>
             </div>
-            <div className="flex flex-col items-center justify-center p-4 border rounded-xl bg-card hover:border-primary/50 transition-colors">
-              <div className="text-4xl sm:text-5xl font-black text-primary">{profile?.exact_scores || 0}</div>
-              <div className="text-sm font-medium text-muted-foreground mt-2 uppercase tracking-wide">Placares Exatos</div>
-            </div>
-            <div className="flex flex-col items-center justify-center p-4 border rounded-xl bg-card hover:border-primary/50 transition-colors">
-              <div className="text-4xl sm:text-5xl font-black text-primary">
-                {profile?.total_points && profile?.exact_scores
-                  ? ((profile.exact_scores / Math.max(profile.total_points, 1)) * 100).toFixed(0)
-                  : '0'}%
+
+            {/* SE O USUÁRIO AINDA NÃO PAGOU */}
+            {myProfile?.payment_status === 'unpaid' && (
+              <div className="bg-card border rounded-xl p-4 sm:p-6 text-center space-y-4 shadow-inner mt-auto">
+                <h3 className="font-bold text-lg">Valide sua participação!</h3>
+                <p className="text-sm text-muted-foreground">Escaneie o QR Code ou use a chave PIX abaixo.</p>
+                
+                {/* Imagem do QR Code - Basta colocar um qrcode.png na pasta public */}
+                <div className="flex justify-center my-4">
+  <div className="w-40 h-40 bg-white p-2 rounded-lg border-2 border-dashed border-primary flex items-center justify-center overflow-hidden hover:scale-105 transition-transform">
+    <img src="/pix.png" alt="QR Code PIX R$ 15,00" className="w-full h-full object-contain" />
+  </div>
+</div>
+
+                <div className="bg-muted p-3 rounded-md select-all font-mono text-xs sm:text-sm text-center border break-all">
+                  00020126580014BR.GOV.BCB.PIX013663d9984d-bf80-49d3-a340-e6a925f9bca1520400005303986540515.005802BR5922Gabriel Mayer Babinski6009SAO PAULO62140510YkKPLsxjNc63046468
+                </div>
+                
+                <button 
+                  onClick={handleNotifyPayment}
+                  disabled={paymentLoading}
+                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 px-4 rounded-lg transition-all"
+                >
+                  {paymentLoading ? 'Avisando...' : 'Já fiz o PIX de R$ 15,00'}
+                </button>
               </div>
-              <div className="text-sm font-medium text-muted-foreground mt-2 uppercase tracking-wide">Taxa de Acerto</div>
+            )}
+
+            {/* SE O USUÁRIO CLICOU EM "JÁ PAGUEI" */}
+            {myProfile?.payment_status === 'pending' && (
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-6 text-center flex flex-col items-center mt-auto">
+                <Clock className="h-12 w-12 text-amber-500 mb-2 animate-pulse" />
+                <h3 className="font-bold text-amber-500 text-lg">Pagamento em Análise</h3>
+                <p className="text-sm text-muted-foreground mt-1">O administrador está conferindo o seu PIX. Logo você estará no bolão oficial!</p>
+              </div>
+            )}
+
+            {/* SE O ADMINISTRADOR VALIDOU O PAGAMENTO */}
+            {myProfile?.payment_status === 'paid' && (
+              <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-6 text-center flex flex-col items-center mt-auto">
+                <CheckCircle2 className="h-12 w-12 text-green-500 mb-2" />
+                <h3 className="font-bold text-green-600 text-lg">Aposta Confirmada!</h3>
+                <p className="text-sm text-muted-foreground mt-1">Boa sorte! Seus palpites estão valendo para o prêmio principal.</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* CARD DA LISTA DE QUEM PAGOU */}
+        <Card className="flex flex-col">
+          <CardHeader>
+            <CardTitle className="text-lg">Status dos Participantes</CardTitle>
+            <CardDescription>Quem já garantiu a vaga no bolão</CardDescription>
+          </CardHeader>
+          <CardContent className="flex-1">
+            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+              {allUsers.map((user) => (
+                <div key={user.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/30 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm uppercase">
+                      {user.name?.substring(0, 2) || 'UK'}
+                    </div>
+                    <span className="font-medium text-sm sm:text-base truncate max-w-[120px] sm:max-w-[200px]">{user.name}</span>
+                  </div>
+                  
+                  {user.payment_status === 'paid' ? (
+                    <span className="flex items-center gap-1 text-xs font-bold text-green-600 bg-green-500/10 px-2 py-1 rounded-md">
+                      <CheckCircle2 className="h-4 w-4" /> Pago
+                    </span>
+                  ) : user.payment_status === 'pending' ? (
+                    <span className="flex items-center gap-1 text-xs font-bold text-amber-600 bg-amber-500/10 px-2 py-1 rounded-md">
+                      <Clock className="h-4 w-4" /> Pendente
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 text-xs font-bold text-muted-foreground bg-muted px-2 py-1 rounded-md">
+                      Aguardando
+                    </span>
+                  )}
+                </div>
+              ))}
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
+
     </div>
   )
 }
