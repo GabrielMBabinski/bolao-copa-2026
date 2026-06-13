@@ -100,7 +100,8 @@ export default function Groups() {
                   </p>
                 ) : (
                   /* A MÁGICA DA ROLAGEM ACONTECE NESTA DIV ABAIXO */
-<div className="w-full pb-2 [&_div]:no-scrollbar [&_table]:no-scrollbar no-scrollbar overflow-x-auto">                    <Table className="min-w-[450px]">
+<div className="w-full pb-2 [&>div]:no-scrollbar">
+                    <Table className="min-w-[450px]">
                       <TableHeader>
                         <TableRow>
                           <TableHead className="w-8 text-center text-xs sm:text-sm px-1 sm:px-4">#</TableHead>
