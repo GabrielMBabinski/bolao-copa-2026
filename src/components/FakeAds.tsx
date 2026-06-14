@@ -89,7 +89,7 @@ export default function FakeAds() {
         {/* Corpo do Anúncio */}
         <div 
           className="flex gap-3 items-center"
-          onClick={() => alert('⚠️ ATENÇÃO: Seu computador acaba de ser infectado por 3 cavalos de troia! (Brincadeira, pare de clicar em anúncios duvidosos!)')}
+          onClick={() => alert('⚠️ ATENÇÃO: Seu computador acaba de ser infectado por 3 cavalos de troia!')}
         >
           {/* Ícone dinâmico com borrão tosco */}
           <div className={`${currentAd.bgColor} p-3 rounded border border-gray-300 animate-pulse`}>
