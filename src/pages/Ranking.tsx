@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Trophy, Medal, Award, BadgeDollarSign } from 'lucide-react' 
+import UserAvatar from '@/components/UserAvatar'
 
 export default function Ranking() {
   const [leaderboard, setLeaderboard] = useState<Profile[]>([])
@@ -133,12 +134,22 @@ export default function Ranking() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-                            <div className="flex items-center gap-2 shrink-0">
-                              {getRankBadge(rank)}
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+                            
+                            {/* BLOCO COM A POSIÇÃO E O AVATAR */}
+                            <div className="flex items-center gap-3 shrink-0">
+                              <div className="w-8 flex justify-center">
+                                {getRankBadge(rank)}
+                              </div>
+                              <UserAvatar 
+                                name={profile.name || 'UK'} 
+                                url={profile.avatar_url} 
+                                className="w-8 h-8 sm:w-10 sm:h-10 text-sm border-primary/30 shadow-sm" 
+                              />
                             </div>
+                            
                             <div className="flex flex-col items-start">
-                              <div className="font-bold text-base flex items-center gap-2">
+                              <div className="font-bold text-base flex flex-wrap items-center gap-2">
                                 {profile.name}
                                 
                                 {/* TAG DO VENCEDOR NA LINHA DO PRIMEIRO COLOCADO */}

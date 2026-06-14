@@ -65,7 +65,6 @@ export const auth = {
 // Funções helper para profiles
 export const profiles = {
   getProfile: async (id: string) => {
-    // Adicione o avatar_url na lista do select!
     const { data, error } = await supabase
       .from('profiles')
       .select('id, name, is_admin, payment_status, avatar_url') 
@@ -83,9 +82,8 @@ export const profiles = {
       .single()
     return { data, error }
   },
-  // NOVA FUNÇÃO: Puxa todos os perfis para a lista de pagamentos
+
   getAllProfiles: async () => {
-    // Se tiver essa função, adicione aqui também para a lista do Dashboard
     const { data, error } = await supabase
       .from('profiles')
       .select('id, name, payment_status, avatar_url')
@@ -93,7 +91,6 @@ export const profiles = {
     return { data, error }
   },
   
-  // NOVA FUNÇÃO: Muda o status para pendente quando o usuário clica que pagou
   notifyPayment: async (userId: string) => {
     const { data, error } = await supabase
       .from('profiles')
@@ -138,7 +135,6 @@ export const matches = {
 
   getUpcoming: async (days: number = 3) => {
     const now = new Date()
-    // Subtrai 4 horas do momento atual para garantir que o jogo não suma da tela enquanto está rolando e o fuso horário varia
     const pastDate = new Date(now.getTime() - 4 * 60 * 60 * 1000)
     const futureDate = new Date(now.getTime() + days * 24 * 60 * 60 * 1000)
     
@@ -149,10 +145,9 @@ export const matches = {
         home_team:teams!matches_home_team_id_fkey(*),
         away_team:teams!matches_away_team_id_fkey(*)
       `)
-      // A MÁGICA INVERTIDA: Pega absolutamente tudo que NÃO estiver com status 'finished'
       .neq('status', 'finished')
-      .gte('match_date', pastDate.toISOString()) // De 4 horas atrás...
-      .lte('match_date', futureDate.toISOString()) // ...Até X dias no futuro
+      .gte('match_date', pastDate.toISOString())
+      .lte('match_date', futureDate.toISOString())
       .order('match_date', { ascending: true })
       
     return { data, error }
@@ -254,7 +249,8 @@ export const ranking = {
   getLeaderboard: async () => {
     const { data, error } = await supabase
       .from('profiles')
-      .select('*')
+      // Adicionamos o created_at e updated_at no final para o TypeScript parar de chorar
+      .select('id, name, total_points, exact_scores, is_admin, payment_status, avatar_url, created_at, updated_at')
       .order('total_points', { ascending: false })
       .order('exact_scores', { ascending: false })
     return { data, error }
