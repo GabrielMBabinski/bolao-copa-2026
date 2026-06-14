@@ -35,7 +35,7 @@ const getPhaseLabel = (phase: string) => {
 }
 
 // --- COMPONENTE DE LISTA DE AMIGOS ---
-const FriendsPredictionsList = ({ matchId, matchDate }: { matchId: string, matchDate: string }) => {
+const FriendsPredictionsList = ({ matchId, matchDate, timeOffset }: { matchId: string, matchDate: string, timeOffset: number }) => {
   const [show, setShow] = useState(false)
   const [list, setList] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
@@ -43,28 +43,17 @@ const FriendsPredictionsList = ({ matchId, matchDate }: { matchId: string, match
   const load = async () => {
     setLoading(true)
     try {
-      // 1. TRAVA ANTIFRAUDE: Busca a hora oficial de um servidor externo no momento do clique
-      let realTime;
-      try {
-        const res = await fetch('https://worldtimeapi.org/api/timezone/Etc/UTC')
-        if (!res.ok) throw new Error('API indisponível')
-        const data = await res.json()
-        realTime = new Date(data.datetime)
-      } catch (err) {
-        // Se ele tentar desligar a internet ou bloquear a API para forçar a hora local
-        alert("⚠️ Erro de Segurança: Não foi possível conectar ao servidor de horário global. Desative bloqueadores ou VPNs para ver os palpites da galera.")
-        setShow(false)
-        return
-      }
+      // Usa a diferença de tempo já calculada no início, sem fazer nova requisição (imune a bloqueadores)
+      const realTime = new Date(new Date().getTime() + timeOffset)
 
-      // 2. Compara a hora inalterável da internet com a hora do jogo
+      // Compara a hora real com a hora do jogo
       if (normalizeDate(matchDate) > realTime) {
-        alert("🚨 PEGO NO PULO! O sistema detectou que a hora do seu dispositivo foi alterada manualmente.\n\nTentando trapacear no bolão copiando a galera? Os palpites só serão liberados quando a bola rolar de verdade!")
+        alert("🚨 PEGO NO PULO! O sistema detectou uma inconsistência no relógio.\n\nOs palpites da galera só serão liberados quando a bola rolar de verdade!")
         setShow(false)
         return
       }
 
-      // 3. Se passou pela segurança, puxa os dados do Supabase
+      // Busca os dados do Supabase
       const { data, error } = await supabase
         .from('predictions')
         .select('home_score, away_score, profiles(name)')
@@ -74,6 +63,7 @@ const FriendsPredictionsList = ({ matchId, matchDate }: { matchId: string, match
       setList(data || [])
     } catch (e) {
       console.error(e)
+      alert("Erro ao carregar palpites.")
     } finally {
       setLoading(false)
     }
@@ -90,7 +80,7 @@ const FriendsPredictionsList = ({ matchId, matchDate }: { matchId: string, match
       </Button>
       {show && (
         <div className="mt-3 p-3 bg-muted rounded-lg space-y-2">
-          {loading ? <div className="text-sm text-center">Inspecionando segurança da conexão...</div> :
+          {loading ? <div className="text-sm text-center animate-pulse">Carregando palpites...</div> :
            list.length === 0 ? <div className="text-sm text-center">Ninguém mais palpitou.</div> :
            list.map((p, i) => (
             <div key={i} className="flex items-center justify-between text-sm bg-background p-2 rounded border border-border/50 shadow-sm">
@@ -170,7 +160,7 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', pre
         )}
       </div>
 
-      {isLocked && <FriendsPredictionsList matchId={match.id} matchDate={match.match_date} />}
+      {isLocked && <FriendsPredictionsList matchId={match.id} matchDate={match.match_date} timeOffset={timeOffset} />}
     </div>
   )
 }
@@ -336,7 +326,7 @@ export default function Predictions() {
                     )}
                   </div>
 
-                  <FriendsPredictionsList matchId={pred.match_id} matchDate={pred.match.match_date} />
+                  <FriendsPredictionsList matchId={pred.match_id} matchDate={pred.match.match_date} timeOffset={timeOffset} />
                 </div>
               )
             })
