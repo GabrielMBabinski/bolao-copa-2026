@@ -12,20 +12,14 @@ import TeamFlag from '@/components/TeamFlag'
 
 // --- FUNÇÕES AUXILIARES ---
 
-// A MÁGICA DO FUSO HORÁRIO ACONTECE AQUI
 const normalizeDate = (dateString: string) => {
-  // 1. Troca qualquer espaço em branco por 'T' para o Safari não dar "Invalid Date"
   const formattedString = dateString.replace(' ', 'T')
-  
-  // 2. Verifica se a data já veio com fuso. Se não veio, força o fuso de Mato Grosso (-04:00)
   const hasTimezone = formattedString.includes('Z') || formattedString.match(/[+-]\d{2}:\d{2}$/)
   const safeDateStr = hasTimezone ? formattedString : `${formattedString}-04:00`
-  
   return new Date(safeDateStr)
 }
 
 const formatDate = (dateString: string) => {
-  // Agora usamos a data normalizada para exibir
   return normalizeDate(dateString).toLocaleDateString('pt-BR', {
     day: '2-digit', month: '2-digit', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
@@ -40,10 +34,7 @@ const getPhaseLabel = (phase: string) => {
   return labels[phase] || phase
 }
 
-// O bloqueio agora é cravado e absoluto, independente de onde o usuário mora
-const canPredict = (matchDate: string) => normalizeDate(matchDate) > new Date()
-
-// --- COMPONENTE DE LISTA DE AMIGOS (Efeito Sanfona) ---
+// --- COMPONENTE DE LISTA DE AMIGOS ---
 const FriendsPredictionsList = ({ matchId }: { matchId: string }) => {
   const [show, setShow] = useState(false)
   const [list, setList] = useState<any[]>([])
@@ -90,7 +81,7 @@ const FriendsPredictionsList = ({ matchId }: { matchId: string }) => {
 }
 
 // --- COMPONENTE EXTRAÍDO ---
-const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', predictionId }: { match: MatchWithTeams, onSave: (id: string, home: number, away: number, predId?: string) => Promise<void>, initialHome?: number | '', initialAway?: number | '', predictionId?: string }) => {
+const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', predictionId, timeOffset }: { match: MatchWithTeams, onSave: (id: string, home: number, away: number, predId?: string) => Promise<void>, initialHome?: number | '', initialAway?: number | '', predictionId?: string, timeOffset: number }) => {
   const [homeScore, setHomeScore] = useState<number | ''>(initialHome)
   const [awayScore, setAwayScore] = useState<number | ''>(initialAway)
   const [saving, setSaving] = useState(false)
@@ -108,7 +99,9 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', pre
     setTimeout(() => setJustSaved(false), 2000)
   }
 
-  const isLocked = !canPredict(match.match_date)
+  // A NOVA REGRA BLINDADA COM A HORA DA INTERNET
+  const realCurrentTime = new Date(new Date().getTime() + timeOffset)
+  const isLocked = normalizeDate(match.match_date) <= realCurrentTime
 
   return (
     <div className={`p-4 border rounded-lg flex flex-col gap-4 ${isLocked ? 'opacity-80 bg-muted/10' : 'bg-card shadow-sm hover:shadow-md transition-all'}`}>
@@ -164,6 +157,27 @@ export default function Predictions() {
   const [userPredictions, setUserPredictions] = useState<PredictionWithMatch[]>([])
   const [availableMatches, setAvailableMatches] = useState<MatchWithTeams[]>([])
   const [loading, setLoading] = useState(true)
+  
+  // Estado que armazena a diferença entre a hora do celular e a hora real
+  const [timeOffset, setTimeOffset] = useState(0)
+
+  // Busca a hora da internet assim que a tela abre
+  useEffect(() => {
+    async function syncInternetTime() {
+      try {
+        const res = await fetch('https://worldtimeapi.org/api/timezone/Etc/UTC')
+        const data = await res.json()
+        const internetTime = new Date(data.datetime).getTime()
+        const localTime = new Date().getTime()
+        
+        // Salva se o usuário está adiantado ou atrasado em milissegundos
+        setTimeOffset(internetTime - localTime)
+      } catch (error) {
+        console.log('API de tempo falhou, caindo para hora local', error)
+      }
+    }
+    syncInternetTime()
+  }, [])
 
   useEffect(() => {
     async function loadData() {
@@ -239,7 +253,7 @@ export default function Predictions() {
               <p>Nenhuma partida disponível no momento</p>
             </Card>
           ) : (
-            availableMatches.map((match) => <PredictionForm key={match.id} match={match} onSave={savePrediction} />)
+            availableMatches.map((match) => <PredictionForm key={match.id} match={match} onSave={savePrediction} timeOffset={timeOffset} />)
           )}
         </TabsContent>
 
@@ -251,7 +265,10 @@ export default function Predictions() {
              </Card>
           ) : (
             userPredictions.map((pred) => {
-              const isLocked = !canPredict(pred.match.match_date);
+              
+              // Verifica o bloqueio usando a hora da internet combinada
+              const realCurrentTime = new Date(new Date().getTime() + timeOffset)
+              const isLocked = normalizeDate(pred.match.match_date) <= realCurrentTime
 
               if (!isLocked) {
                 return (
@@ -259,6 +276,7 @@ export default function Predictions() {
                     key={pred.id} match={pred.match} 
                     initialHome={pred.home_score} initialAway={pred.away_score}
                     predictionId={pred.id} onSave={savePrediction} 
+                    timeOffset={timeOffset} // Passa o offset adiante
                   />
                 )
               }
