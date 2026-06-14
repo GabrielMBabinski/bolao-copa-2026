@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Calendar, Clock, Trophy, BadgeDollarSign, CheckCircle2, ChevronDown } from 'lucide-react'
 import TeamFlag from '@/components/TeamFlag'
 
+
 export default function Dashboard() {
   const { profile } = useAuth()
   const [upcomingMatches, setUpcomingMatches] = useState<MatchWithTeams[]>([])

@@ -3,6 +3,7 @@ import { Outlet, Link, useLocation } from 'react-router-dom'
 import { Trophy, Home, Users, Target, LogOut, Shield, Sun, Moon, Menu, X } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from './ui/button'
+import UserAvatar from '@/components/UserAvatar' // <-- IMPORTAÇÃO DO NOVO COMPONENTE
 
 export default function Layout() {
   const { user, profile, signOut } = useAuth()
@@ -39,25 +40,23 @@ export default function Layout() {
     { path: '/ranking', label: 'Ranking', icon: Trophy },
   ]
 
-  // Esconde o Admin como combinamos, ou deixa só para o seu usuário
   if (profile?.is_admin) {
     navItems.push({ path: '/admin', label: 'Admin', icon: Shield })
   }
 
   return (
     <div className="min-h-screen bg-background">
-      {/* A MÁGICA ACONTECE AQUI: sticky, top-0, z-50 e o efeito de vidro (backdrop-blur) */}
       <nav className="sticky top-0 z-50 w-full border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60">
         <div className="container mx-auto px-4">
           <div className="flex h-16 items-center justify-between">
             
-            {/* LADO ESQUERDO: Logo e Nome (Sempre visível) */}
+            {/* LADO ESQUERDO: Logo e Nome */}
             <Link to="/" className="flex items-center space-x-2">
               <Trophy className="h-6 w-6 text-primary" />
               <span className="text-xl font-bold truncate">Bolão Copa 2026</span>
             </Link>
 
-            {/* CENTRO: Links de Navegação (Escondido no Celular, Visível no Desktop) */}
+            {/* CENTRO: Links de Navegação (Desktop) */}
             <div className="hidden md:flex space-x-4">
               {navItems.map((item) => {
                 const Icon = item.icon
@@ -79,7 +78,7 @@ export default function Layout() {
               })}
             </div>
             
-            {/* LADO DIREITO: Tema, Usuário e Sair (Escondido no Celular, Visível no Desktop) */}
+            {/* LADO DIREITO: Tema, Usuário e Sair (Desktop) */}
             <div className="hidden md:flex items-center space-x-4">
               <button 
                 onClick={() => setIsDark(!isDark)} 
@@ -89,9 +88,13 @@ export default function Layout() {
                 {isDark ? <Sun className="h-5 w-5 text-yellow-400" /> : <Moon className="h-5 w-5 text-foreground" />}
               </button>
 
-              <span className="text-sm text-muted-foreground truncate max-w-[150px]">
-                {profile?.name || user?.email}
-              </span>
+              {/* BLOCO DO AVATAR + NOME DO USUÁRIO */}
+              <div className="flex items-center space-x-2 bg-muted/40 pl-2 pr-3 py-1 rounded-full border border-border/40">
+                <UserAvatar name={profile?.name || user?.email} url={profile?.avatar_url} className="w-7 h-7 text-xs" />
+                <span className="text-sm font-medium text-foreground truncate max-w-[120px]">
+                  {profile?.name || user?.email}
+                </span>
+              </div>
               
               <Button
                 variant="ghost"
@@ -104,7 +107,7 @@ export default function Layout() {
               </Button>
             </div>
 
-            {/* BOTÃO HAMBÚRGUER (Visível no Celular, Escondido no Desktop) */}
+            {/* BOTÃO HAMBÚRGUER + AVATAR RÁPIDO (Mobile) */}
             <div className="md:hidden flex items-center space-x-2">
               <button 
                 onClick={() => setIsDark(!isDark)} 
@@ -112,6 +115,9 @@ export default function Layout() {
               >
                 {isDark ? <Sun className="h-5 w-5 text-yellow-400" /> : <Moon className="h-5 w-5 text-foreground" />}
               </button>
+
+              {/* Pequeno indicador visual do utilizador mesmo com o menu fechado */}
+              <UserAvatar name={profile?.name || user?.email} url={profile?.avatar_url} className="w-7 h-7 text-xs mr-1" />
 
               <button
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -148,10 +154,20 @@ export default function Layout() {
               })}
             </div>
             
+            {/* SEÇÃO DO PERFIL REESTRUTURADA NO MOBILE */}
             <div className="pt-4 border-t flex flex-col space-y-3">
-              <span className="text-sm font-medium text-muted-foreground px-3">
-                Logado como: {profile?.name || user?.email}
-              </span>
+              <div className="flex items-center space-x-3 px-3 py-1">
+                <UserAvatar name={profile?.name || user?.email} url={profile?.avatar_url} className="w-10 h-10 text-base" />
+                <div className="flex flex-col min-w-0">
+                  <span className="text-sm font-bold text-foreground truncate">
+                    {profile?.name || 'Utilizador'}
+                  </span>
+                  <span className="text-xs text-muted-foreground truncate">
+                    {user?.email}
+                  </span>
+                </div>
+              </div>
+
               <Button
                 variant="destructive"
                 onClick={signOut}
