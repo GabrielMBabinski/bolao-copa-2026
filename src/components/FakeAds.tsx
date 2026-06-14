@@ -52,26 +52,24 @@ export default function FakeAds() {
   }
 
   useEffect(() => {
-    // Aparece o primeiro anúncio 5 segundos após abrir o site
     const initialTimer = setTimeout(showRandomAd, 5000)
     return () => clearTimeout(initialTimer)
   }, [])
 
-  // NOVA FUNÇÃO: Executa a trollagem agressiva e esconde o anúncio
-  const handleAggressiveRedirect = () => {
-    setIsVisible(false) // Esconde este anúncio
+  // NOVA LÓGICA DE SUSTO: Não usamos mais window.open aqui!
+  const handleScareTactics = () => {
+    setIsVisible(false) // Some com o anúncio
     
-    // Trava a tela com o alerta assustador
-    alert('⚠️ AMEAÇA DETECTADA! Seu dispositivo foi exposto a 3 Cavalos de Troia.\n\nVocê será redirecionado para instalar um Antivírus imediatamente.')
-    
-    // Abre o Avast violando a navegação
-    window.open('https://www.avast.com/pt-br/download-thank-you.php?product=AVAST-ONE-MOD-WIN-AV-FAD&locale=pt-br&direct=1', '_blank')
-    
-    // Programa o próximo anúncio para voltar em 20 segundos
+    // Agenda o próximo anúncio
     setTimeout(showRandomAd, 20000)
+
+    // Atraso de 100ms para garantir que a aba do Avast abra PRIMEIRO nativamente.
+    // Depois o alerta trava a tela antiga kkkk.
+    setTimeout(() => {
+      alert('⚠️ AMEAÇA DETECTADA! Seu dispositivo foi exposto a 3 Cavalos de Troia.\n\nVocê será redirecionado para instalar um Antivírus imediatamente.')
+    }, 100)
   }
 
-  // Define qual ícone renderizar com base no anúncio sorteado
   const IconComponent = currentAd.icon
 
   if (!isVisible) return null
@@ -79,13 +77,15 @@ export default function FakeAds() {
   return (
     <div className="fixed bottom-4 right-4 z-[9000] w-72 animate-in slide-in-from-bottom-10 fade-in duration-500 font-sans">
       
-      {/* A ARMADILHA GLOBAL:
-        Toda esta div (o banner inteiro) agora tem o onClick agressivo.
-        Qualquer clique aqui dentro (imagem, texto, botão, até o X) dispara o redirecionamento.
+      {/* O GOLPE DE MESTRE: Trocamos a <div> por uma tag <a>. 
+        Nenhum bloqueador de pop-up do mundo bloqueia um link clicado pelo usuário!
       */}
-      <div 
-        className="bg-white border-[3px] border-dashed border-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.5)] relative flex flex-col p-2 group hover:cursor-pointer transition-transform hover:scale-105"
-        onClick={handleAggressiveRedirect}
+      <a 
+        href="https://www.avast.com/pt-br/download-thank-you.php?product=AVAST-ONE-MOD-WIN-AV-FAD&locale=pt-br&direct=1"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block bg-white border-[3px] border-dashed border-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.5)] relative flex flex-col p-2 group hover:cursor-pointer transition-transform hover:scale-105 select-none no-underline"
+        onClick={handleScareTactics}
       >
         
         {/* Cabeçalho falso do anúncio */}
@@ -94,19 +94,13 @@ export default function FakeAds() {
             <AlertCircle className="h-3 w-3" /> Ads by BolãoFree
           </span>
           
-          {/* O FALSO BOTÃO FECHAR:
-            Removemos o 'onClick' próprio e o 'e.stopPropagation()'.
-            Ele continua parecendo um botão, mas ao clicar nele, o clique 'sobe' para a div pai,
-            disparando o 'handleAggressiveRedirect' kkkk.
-          */}
-          <span className="bg-gray-200 text-gray-500 rounded px-1 group-hover:bg-red-500 group-hover:text-white transition-colors">
+          <span className="bg-gray-200 text-gray-500 rounded px-1 group-hover:bg-red-500 group-hover:text-white transition-colors flex items-center justify-center">
             <X className="h-4 w-4" />
           </span>
         </div>
 
-        {/* Corpo do Anúncio (Removido o onClick individual daqui) */}
+        {/* Corpo do Anúncio */}
         <div className="flex gap-3 items-center">
-          {/* Ícone dinâmico com borrão tosco */}
           <div className={`${currentAd.bgColor} p-3 rounded border border-gray-300 animate-pulse`}>
             <IconComponent className="w-10 h-10 blur-[2px]" />
           </div>
@@ -126,7 +120,7 @@ export default function FakeAds() {
           Clique aqui e descubra &gt;&gt;
         </div>
 
-      </div>
+      </a>
     </div>
   )
 }
