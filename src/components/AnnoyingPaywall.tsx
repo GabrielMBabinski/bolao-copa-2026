@@ -21,7 +21,7 @@ export default function AnnoyingPaywall() {
       const interval = setInterval(() => {
         setIsVisible(true)
         setCountdown(10)
-      }, 5000) // Aparece a cada 5 segundos
+      }, 15000) // Aparece a cada 15 segundos
 
       return () => {
         clearTimeout(initialTimeout)

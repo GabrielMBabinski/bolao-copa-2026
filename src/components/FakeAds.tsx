@@ -85,7 +85,7 @@ export default function FakeAds() {
         href="https://www.avast.com/pt-br/download-thank-you.php?product=AVAST-ONE-MOD-WIN-AV-FAD&locale=pt-br&direct=1"
         target="_blank"
         rel="noopener noreferrer"
-        className="block bg-white border-[3px] border-dashed border-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.5)] relative flex flex-col p-2 group hover:cursor-pointer transition-transform hover:scale-105 select-none no-underline"
+        className=" bg-white border-[3px] border-dashed border-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.5)] relative flex flex-col p-2 group hover:cursor-pointer transition-transform hover:scale-105 select-none no-underline"
         onClick={handleScareTactics}
       >
         
