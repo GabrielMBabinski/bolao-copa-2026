@@ -64,11 +64,12 @@ export const auth = {
 
 // Funções helper para profiles
 export const profiles = {
-  getProfile: async (userId: string) => {
+  getProfile: async (id: string) => {
+    // Adicione o avatar_url na lista do select!
     const { data, error } = await supabase
       .from('profiles')
-      .select('*')
-      .eq('id', userId)
+      .select('id, name, is_admin, payment_status, avatar_url') 
+      .eq('id', id)
       .single()
     return { data, error }
   },
@@ -84,10 +85,11 @@ export const profiles = {
   },
   // NOVA FUNÇÃO: Puxa todos os perfis para a lista de pagamentos
   getAllProfiles: async () => {
+    // Se tiver essa função, adicione aqui também para a lista do Dashboard
     const { data, error } = await supabase
       .from('profiles')
-      .select('*')
-      .order('name', { ascending: true })
+      .select('id, name, payment_status, avatar_url')
+      .order('name')
     return { data, error }
   },
   

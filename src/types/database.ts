@@ -41,6 +41,7 @@ export interface Database {
           name: string
           avatar_url: string | null
           is_admin: boolean
+          payment_status: 'unpaid' | 'pending' | 'paid'
           total_points: number
           exact_scores: number
           created_at: string
@@ -51,6 +52,7 @@ export interface Database {
           name: string
           avatar_url?: string | null
           is_admin?: boolean
+          payment_status?: 'unpaid' | 'pending' | 'paid'
           total_points?: number
           exact_scores?: number
           created_at?: string
@@ -61,6 +63,7 @@ export interface Database {
           name?: string
           avatar_url?: string | null
           is_admin?: boolean
+          payment_status?: 'unpaid' | 'pending' | 'paid'
           total_points?: number
           exact_scores?: number
           created_at?: string
