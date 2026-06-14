@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Calendar, Clock, Trophy, BadgeDollarSign, CheckCircle2, ChevronDown } from 'lucide-react'
 import TeamFlag from '@/components/TeamFlag'
-
+import UserAvatar from '@/components/UserAvatar'
 
 export default function Dashboard() {
   const { profile } = useAuth()
@@ -310,9 +310,7 @@ export default function Dashboard() {
               {allUsers.map((user) => (
                 <div key={user.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/30 transition-colors">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm uppercase">
-                      {user.name?.substring(0, 2) || 'UK'}
-                    </div>
+                    <UserAvatar name={user.name} url={user.avatar_url} />
                     <span className="font-medium text-sm sm:text-base truncate max-w-[120px] sm:max-w-[200px]">{user.name}</span>
                   </div>
                   
