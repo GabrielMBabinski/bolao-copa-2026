@@ -14,9 +14,13 @@ import TeamFlag from '@/components/TeamFlag'
 
 // A MÁGICA DO FUSO HORÁRIO ACONTECE AQUI
 const normalizeDate = (dateString: string) => {
-  // Se a data do banco não vier com fuso explícito, nós forçamos ela a ser Mato Grosso (UTC-4)
-  const hasTimezone = dateString.includes('Z') || dateString.match(/[+-]\d{2}:\d{2}$/)
-  const safeDateStr = hasTimezone ? dateString : `${dateString}-04:00`
+  // 1. Troca qualquer espaço em branco por 'T' para o Safari não dar "Invalid Date"
+  const formattedString = dateString.replace(' ', 'T')
+  
+  // 2. Verifica se a data já veio com fuso. Se não veio, força o fuso de Mato Grosso (-04:00)
+  const hasTimezone = formattedString.includes('Z') || formattedString.match(/[+-]\d{2}:\d{2}$/)
+  const safeDateStr = hasTimezone ? formattedString : `${formattedString}-04:00`
+  
   return new Date(safeDateStr)
 }
 
