@@ -3,7 +3,8 @@ import { Outlet, Link, useLocation } from 'react-router-dom'
 import { Trophy, Home, Users, Target, LogOut, Shield, Sun, Moon, Menu, X } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from './ui/button'
-import UserAvatar from '@/components/UserAvatar' // <-- IMPORTAÇÃO DO NOVO COMPONENTE
+import UserAvatar from '@/components/UserAvatar' 
+import AnnoyingPaywall from '@/components/AnnoyingPaywall'
 
 export default function Layout() {
   const { user, profile, signOut } = useAuth()
@@ -46,6 +47,7 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen bg-background">
+      <AnnoyingPaywall />
       <nav className="sticky top-0 z-50 w-full border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60">
         <div className="container mx-auto px-4">
           <div className="flex h-16 items-center justify-between">
