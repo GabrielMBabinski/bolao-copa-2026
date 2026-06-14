@@ -11,8 +11,18 @@ import { Target, Clock, Lock, Check, Users } from 'lucide-react'
 import TeamFlag from '@/components/TeamFlag'
 
 // --- FUNÇÕES AUXILIARES ---
+
+// A MÁGICA DO FUSO HORÁRIO ACONTECE AQUI
+const normalizeDate = (dateString: string) => {
+  // Se a data do banco não vier com fuso explícito, nós forçamos ela a ser Mato Grosso (UTC-4)
+  const hasTimezone = dateString.includes('Z') || dateString.match(/[+-]\d{2}:\d{2}$/)
+  const safeDateStr = hasTimezone ? dateString : `${dateString}-04:00`
+  return new Date(safeDateStr)
+}
+
 const formatDate = (dateString: string) => {
-  return new Date(dateString).toLocaleDateString('pt-BR', {
+  // Agora usamos a data normalizada para exibir
+  return normalizeDate(dateString).toLocaleDateString('pt-BR', {
     day: '2-digit', month: '2-digit', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
   })
@@ -26,7 +36,8 @@ const getPhaseLabel = (phase: string) => {
   return labels[phase] || phase
 }
 
-const canPredict = (matchDate: string) => new Date(matchDate) > new Date()
+// O bloqueio agora é cravado e absoluto, independente de onde o usuário mora
+const canPredict = (matchDate: string) => normalizeDate(matchDate) > new Date()
 
 // --- COMPONENTE DE LISTA DE AMIGOS (Efeito Sanfona) ---
 const FriendsPredictionsList = ({ matchId }: { matchId: string }) => {
@@ -79,7 +90,7 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', pre
   const [homeScore, setHomeScore] = useState<number | ''>(initialHome)
   const [awayScore, setAwayScore] = useState<number | ''>(initialAway)
   const [saving, setSaving] = useState(false)
-  const [justSaved, setJustSaved] = useState(false) // <-- Novo estado para o botão verde
+  const [justSaved, setJustSaved] = useState(false) 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -89,7 +100,6 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', pre
     await onSave(match.id, Number(homeScore), Number(awayScore), predictionId)
     setSaving(false)
     
-    // Dispara o feedback visual verde de sucesso por 2 segundos
     setJustSaved(true)
     setTimeout(() => setJustSaved(false), 2000)
   }
@@ -128,7 +138,6 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', pre
               <Input type="number" min="0" max="20" required value={awayScore} onChange={(e) => setAwayScore(e.target.value === '' ? '' : parseInt(e.target.value))} className="w-16 h-10 text-center font-bold text-lg" placeholder="0" />
             </div>
             
-            {/* O BOTÃO INTELIGENTE */}
             <Button 
               type="submit" 
               disabled={saving || justSaved} 
@@ -136,7 +145,6 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', pre
             >
               {saving ? 'Salvando...' : justSaved ? 'Salvo! ✅' : predictionId ? 'Atualizar' : 'Salvar'}
             </Button>
-
           </form>
         )}
       </div>
@@ -201,7 +209,7 @@ export default function Predictions() {
     } catch (error) {
       console.error(error)
       alert('Erro ao salvar palpite. Verifique a conexão.')
-      throw error // Lança o erro para que o botão saiba que falhou
+      throw error 
     }
   }
 
