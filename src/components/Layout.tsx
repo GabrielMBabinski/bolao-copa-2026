@@ -35,6 +35,30 @@ export default function Layout() {
   }, [isDark]);
   // ------------------------------
 
+  // --- ARMADILHA ANTI-HACKER (F12) ---
+  useEffect(() => {
+    // Só ativa a armadilha em produção para não te atrapalhar enquanto você programa!
+    if (import.meta.env.DEV) return; 
+
+    const antiHackerTrap = setInterval(() => {
+      const before = new Date().getTime()
+      
+      // O 'debugger' congela o navegador inteiro se o F12 (DevTools) estiver aberto
+      debugger; 
+      
+      const after = new Date().getTime()
+      
+      // Se a diferença for maior que 100ms, é porque o debugger pausou a execução
+      if (after - before > 100) {
+        // Punição: recarrega a página na cara dele
+        window.location.reload()
+      }
+    }, 1000)
+
+    return () => clearInterval(antiHackerTrap)
+  }, [])
+  // -----------------------------------
+
   const navItems = [
     { path: '/', label: 'Dashboard', icon: Home },
     { path: '/grupos', label: 'Grupos', icon: Users },
