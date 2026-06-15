@@ -10,4 +10,8 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  build: {
+    sourcemap: false, // O GOLPE FINAL: Desliga o "tradutor" de código
+    minify: true,     // Garante que o Vite vai esmagar e embaralhar tudo
+  }
 })
