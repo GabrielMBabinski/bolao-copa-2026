@@ -111,7 +111,7 @@ export default function Dashboard() {
 
       <div className="relative w-full h-40 sm:h-64 md:h-80 rounded-2xl overflow-hidden mb-8 shadow-xl border border-muted group">
         <img 
-          src="/Endrick-banner.jpg" 
+          src="/Endrick-banner.png" 
           alt="Endrick Copa 2026" 
           className="w-full h-full object-cover object-top transition-transform duration-700 group-hover:scale-105"
         />
