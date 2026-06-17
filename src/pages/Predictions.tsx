@@ -35,7 +35,7 @@ const getPhaseLabel = (phase: string) => {
 }
 
 // --- COMPONENTE DE LISTA DE AMIGOS ---
-const FriendsPredictionsList = ({ matchId, matchDate, timeOffset }: { matchId: string, matchDate: string, timeOffset: number }) => {
+const FriendsPredictionsList = ({ matchId, matchDate, timeOffset, isFinished }: { matchId: string, matchDate: string, timeOffset: number, isFinished: boolean }) => {
   const [show, setShow] = useState(false)
   const [list, setList] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
@@ -53,10 +53,10 @@ const FriendsPredictionsList = ({ matchId, matchDate, timeOffset }: { matchId: s
         return
       }
 
-      // Busca os dados do Supabase
+      // Busca os dados do Supabase incluindo os PONTOS calculados pelo backend
       const { data, error } = await supabase
         .from('predictions')
-        .select('home_score, away_score, profiles(name)')
+        .select('home_score, away_score, points_earned, profiles(name)')
         .eq('match_id', matchId)
       
       if (error) throw error
@@ -85,7 +85,15 @@ const FriendsPredictionsList = ({ matchId, matchDate, timeOffset }: { matchId: s
            list.map((p, i) => (
             <div key={i} className="flex items-center justify-between text-sm bg-background p-2 rounded border border-border/50 shadow-sm">
               <span className="truncate font-medium">{p.profiles?.name || 'Anônimo'}</span>
-              <Badge variant="secondary" className="font-bold text-primary">{p.home_score} x {p.away_score}</Badge>
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="font-bold text-primary">{p.home_score} x {p.away_score}</Badge>
+                {/* Mostra os pontos lidos do banco apenas se o jogo acabou */}
+                {isFinished && p.points_earned !== null && p.points_earned !== undefined && (
+                  <Badge className={`${p.points_earned > 0 ? "bg-green-600 text-white" : "bg-muted-foreground text-white"} ml-2 min-w-[50px] justify-center`}>
+                    {p.points_earned} pts
+                  </Badge>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -113,9 +121,9 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', pre
     setTimeout(() => setJustSaved(false), 2000)
   }
 
-  // A NOVA REGRA BLINDADA COM A HORA DA INTERNET
   const realCurrentTime = new Date(new Date().getTime() + timeOffset)
   const isLocked = normalizeDate(match.match_date) <= realCurrentTime
+  const isFinished = match.status === 'finished'
 
   return (
     <div className={`p-4 border rounded-lg flex flex-col gap-4 ${isLocked ? 'opacity-80 bg-muted/10' : 'bg-card shadow-sm hover:shadow-md transition-all'}`}>
@@ -160,7 +168,7 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', pre
         )}
       </div>
 
-      {isLocked && <FriendsPredictionsList matchId={match.id} matchDate={match.match_date} timeOffset={timeOffset} />}
+      {isLocked && <FriendsPredictionsList matchId={match.id} matchDate={match.match_date} timeOffset={timeOffset} isFinished={isFinished} />}
     </div>
   )
 }
@@ -280,9 +288,9 @@ export default function Predictions() {
           ) : (
             userPredictions.map((pred) => {
               
-              // Verifica o bloqueio usando a hora da internet combinada
               const realCurrentTime = new Date(new Date().getTime() + timeOffset)
               const isLocked = normalizeDate(pred.match.match_date) <= realCurrentTime
+              const isFinished = pred.match.status === 'finished'
 
               if (!isLocked) {
                 return (
@@ -290,7 +298,7 @@ export default function Predictions() {
                     key={pred.id} match={pred.match} 
                     initialHome={pred.home_score} initialAway={pred.away_score}
                     predictionId={pred.id} onSave={savePrediction} 
-                    timeOffset={timeOffset} // Passa o offset adiante
+                    timeOffset={timeOffset}
                   />
                 )
               }
@@ -306,27 +314,54 @@ export default function Predictions() {
 
                   <div className="flex flex-col sm:flex-row items-center justify-center sm:justify-between gap-4">
                     <div className="flex items-center gap-4 w-full justify-center sm:justify-start">
+                      
+                      {/* Lado Esquerdo: Seu Palpite Visual */}
                       <div className="flex flex-col items-center gap-1 min-w-[80px]">
                         <TeamFlag flagCode={pred.match.home_team.flag_code} />
                         <span className="font-medium text-sm text-center">{pred.match.home_team.name}</span>
                       </div>
-                      <span className="text-3xl font-black text-primary tracking-widest bg-muted px-4 py-2 rounded-lg">
-                        {pred.home_score} - {pred.away_score}
-                      </span>
+                      
+                      <div className="flex flex-col items-center">
+                        <span className="text-3xl font-black text-primary tracking-widest bg-muted px-4 py-2 rounded-lg">
+                          {pred.home_score} - {pred.away_score}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground mt-1 uppercase font-bold tracking-wider">Seu Palpite</span>
+                      </div>
+                      
                       <div className="flex flex-col items-center gap-1 min-w-[80px]">
                         <TeamFlag flagCode={pred.match.away_team.flag_code} />
                         <span className="font-medium text-sm text-center">{pred.match.away_team.name}</span>
                       </div>
                     </div>
 
-                    {pred.points_earned > 0 && (
-                      <Badge className="h-8 px-4 text-sm whitespace-nowrap bg-green-600 hover:bg-green-700">
-                        <Check className="h-4 w-4 mr-1" /> +{pred.points_earned} pts
-                      </Badge>
+                    {/* Lado Direito: Placar Real do Jogo e Pontuação Puxada do Banco */}
+                    {isFinished ? (
+                      <div className="flex flex-col items-center bg-primary/10 p-3 rounded-lg min-w-[120px] shadow-inner">
+                        <span className="text-xs font-bold text-primary mb-1">PLACAR FINAL</span>
+                        <span className="text-lg font-black text-primary mb-2 tracking-widest">
+                          {pred.match.home_score} - {pred.match.away_score}
+                        </span>
+                        <Badge className={`h-6 px-3 text-xs whitespace-nowrap ${pred.points_earned > 0 ? 'bg-green-600 hover:bg-green-700' : 'bg-muted-foreground'}`}>
+                          {pred.points_earned > 0 && <Check className="h-3 w-3 mr-1" />} 
+                          {pred.points_earned} pts
+                        </Badge>
+                      </div>
+                    ) : (
+                      pred.points_earned > 0 && (
+                        <Badge className="h-8 px-4 text-sm whitespace-nowrap bg-green-600 hover:bg-green-700">
+                          <Check className="h-4 w-4 mr-1" /> +{pred.points_earned} pts
+                        </Badge>
+                      )
                     )}
                   </div>
 
-                  <FriendsPredictionsList matchId={pred.match_id} matchDate={pred.match.match_date} timeOffset={timeOffset} />
+                  {/* Passando o isFinished para que a lista mostre os pontos de todo mundo */}
+                  <FriendsPredictionsList 
+                    matchId={pred.match_id} 
+                    matchDate={pred.match.match_date} 
+                    timeOffset={timeOffset} 
+                    isFinished={isFinished} 
+                  />
                 </div>
               )
             })

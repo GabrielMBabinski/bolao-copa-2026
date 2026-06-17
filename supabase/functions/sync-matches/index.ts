@@ -7,146 +7,79 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
-    // Get environment variables
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const footballDataToken = Deno.env.get('FOOTBALL_DATA_TOKEN')!
 
-    if (!footballDataToken) {
-      console.error('FOOTBALL_DATA_TOKEN not set')
-      return new Response(
-        JSON.stringify({ error: 'FOOTBALL_DATA_TOKEN not configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
+    if (!footballDataToken) throw new Error('FOOTBALL_DATA_TOKEN não configurado')
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    // ==========================================
-    // 1. CORREÇÃO: JANELA DE 3 DIAS (Fuso Horário)
-    // ==========================================
     const hoje = new Date()
+    const ontem = new Date(hoje); ontem.setDate(ontem.getDate() - 1)
+    const amanha = new Date(hoje); amanha.setDate(amanha.getDate() + 1)
     
-    const ontem = new Date(hoje)
-    ontem.setDate(ontem.getDate() - 1)
-    
-    const amanha = new Date(hoje)
-    amanha.setDate(amanha.getDate() + 1)
-
     const dateFrom = ontem.toISOString().split('T')[0]
     const dateTo = amanha.toISOString().split('T')[0]
     const apiUrl = `https://api.football-data.org/v4/competitions/2000/matches?dateFrom=${dateFrom}&dateTo=${dateTo}`
 
-    console.log(`Buscando jogos de ${dateFrom} até ${dateTo}...`)
-
-    const response = await fetch(apiUrl, {
-      headers: { 'X-Auth-Token': footballDataToken },
-    })
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error('Football-data.org API error:', errorText)
-      throw new Error('Falha ao buscar dados na API')
-    }
+    const response = await fetch(apiUrl, { headers: { 'X-Auth-Token': footballDataToken } })
+    if (!response.ok) throw new Error('Falha ao buscar dados na API')
 
     const data = await response.json()
     const matches = data.matches || []
 
-    console.log(`Encontrados ${matches.length} jogos no período.`)
-
-    if (matches.length === 0) {
-      return new Response(
-        JSON.stringify({ message: 'Nenhum jogo encontrado', updated: 0 }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    // Pega times do banco para mapear IDs
     const { data: teams } = await supabase.from('teams').select('id, name, flag_code')
-
-    if (!teams) throw new Error('Nenhum time encontrado no banco de dados.')
-
-    const teamMap = new Map()
-    teams.forEach((team) => {
-      teamMap.set(team.name.toLowerCase(), team.id)
-      teamMap.set(team.flag_code.toLowerCase(), team.id)
-    })
+    if (!teams) throw new Error('Nenhum time encontrado no banco.')
 
     let updatedCount = 0
     const updateErrors: string[] = []
 
-    // Processar as partidas
     for (const match of matches) {
-      const apiStatus = match.status
+      if (!['IN_PLAY', 'PAUSED', 'FINISHED'].includes(match.status)) continue
 
-      // ==========================================
-      // 2. CORREÇÃO: ACEITAR JOGOS AO VIVO
-      // ==========================================
-      if (!['IN_PLAY', 'PAUSED', 'FINISHED'].includes(apiStatus)) {
-        continue // Pula apenas o que não começou ou foi cancelado/adiado
-      }
+      const dbStatus = match.status === 'FINISHED' ? 'finished' : 'in_progress'
+      const hName = match.homeTeam.name.toLowerCase()
+      const aName = match.awayTeam.name.toLowerCase()
 
-      // Traduz o status da API para o status do seu banco (enum)
-      const dbStatus = apiStatus === 'FINISHED' ? 'finished' : 'in_progress'
+      const findTeamId = (apiName: string) => {
+        return teams.find(t => 
+          apiName.includes(t.name.toLowerCase()) || 
+          (t.flag_code && apiName.includes(t.flag_code.toLowerCase()))
+        )?.id;
+      };
 
-      const homeTeamName = match.homeTeam.name
-      const awayTeamName = match.awayTeam.name
-      
-      // Na API v4, o placar ao vivo (e final) fica no objeto fullTime
-      const homeScore = match.score?.fullTime?.home ?? 0
-      const awayScore = match.score?.fullTime?.away ?? 0
+      const hId = findTeamId(hName)
+      const aId = findTeamId(aName)
 
-      // Encontra IDs
-      const homeTeamId = teamMap.get(homeTeamName.toLowerCase()) || teamMap.get(homeTeamName.toLowerCase().replace(/\s/g, ''))
-      const awayTeamId = teamMap.get(awayTeamName.toLowerCase()) || teamMap.get(awayTeamName.toLowerCase().replace(/\s/g, ''))
-
-      if (!homeTeamId || !awayTeamId) {
-        console.warn(`Times não mapeados: ${homeTeamName} vs ${awayTeamName}`)
+      if (!hId || !aId) {
+        console.warn(`Times não mapeados: ${match.homeTeam.name} vs ${match.awayTeam.name}`)
         continue
       }
 
-      const { data: existingMatch } = await supabase
-        .from('matches')
-        .select('id, status')
-        .eq('home_team_id', homeTeamId)
-        .eq('away_team_id', awayTeamId)
-        .eq('phase', 'group')
-        .single()
-
-      if (!existingMatch) continue
-
-      // Se no NOSSO banco já consta como finalizado, não altera mais.
-      if (existingMatch.status === 'finished') continue
-
-      // Atualiza o jogo! (Seja Ao Vivo ou Finalizado)
       const { error: updateError } = await supabase
         .from('matches')
         .update({
-          home_score: homeScore,
-          away_score: awayScore,
+          home_score: match.score?.fullTime?.home ?? 0,
+          away_score: match.score?.fullTime?.away ?? 0,
           status: dbStatus,
           updated_at: new Date().toISOString(),
         })
-        .eq('id', existingMatch.id)
+        .eq('home_team_id', hId)
+        .eq('away_team_id', aId)
+        .eq('phase', 'group')
 
-      if (updateError) {
-        console.error(`Erro ao atualizar ${homeTeamName}:`, updateError)
-        updateErrors.push(`Falha no update: ${homeTeamName}`)
-        continue
+      if (!updateError) {
+        console.log(`Sucesso: ${match.homeTeam.name} ${match.score?.fullTime?.home} - ${match.score?.fullTime?.away} ${match.awayTeam.name}`)
+        updatedCount++
       }
-
-      console.log(`Sucesso: ${homeTeamName} ${homeScore} - ${awayScore} ${awayTeamName} (${dbStatus})`)
-      updatedCount++
     }
 
     return new Response(
-      JSON.stringify({ message: 'Sync completo', updatedMatches: updatedCount, errors: updateErrors }),
+      JSON.stringify({ message: 'Sync completo', updatedMatches: updatedCount }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 
