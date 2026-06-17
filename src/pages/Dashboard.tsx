@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
+import useSWR, { mutate } from 'swr' // <-- Novo import aqui
 import { useAuth } from '@/hooks/useAuth'
 import { matches, profiles } from '@/lib/supabaseClient'
 import type { MatchWithTeams } from '@/types/database'
@@ -8,55 +9,54 @@ import { Calendar, Clock, Trophy, BadgeDollarSign, CheckCircle2, ChevronDown } f
 import TeamFlag from '@/components/TeamFlag'
 import UserAvatar from '@/components/UserAvatar'
 
+// FUNÇÃO QUE BUSCA TUDO DE UMA VEZ
+const fetchDashboardData = async () => {
+  const [up, fin, users] = await Promise.all([
+    matches.getUpcoming(3),
+    matches.getFinished(5),
+    profiles.getAllProfiles()
+  ])
+  return { 
+    upcoming: up.data || [], 
+    finished: fin.data || [], 
+    users: users.data || [] 
+  }
+}
+
 export default function Dashboard() {
   const { profile } = useAuth()
-  const [upcomingMatches, setUpcomingMatches] = useState<MatchWithTeams[]>([])
-  const [finishedMatches, setFinishedMatches] = useState<MatchWithTeams[]>([])
-  const [allUsers, setAllUsers] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
   const [paymentLoading, setPaymentLoading] = useState(false)
-  
   const [isPaymentVisible, setIsPaymentVisible] = useState(false)
   const paymentSectionRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    async function loadData() {
-      try {
-        const { data: upcoming } = await matches.getUpcoming(3)
-        const { data: finished } = await matches.getFinished(5)
-        const { data: usersData } = await profiles.getAllProfiles()
-        
-        setUpcomingMatches(upcoming || [])
-        setFinishedMatches(finished || [])
-        setAllUsers(usersData || [])
-      } catch (error) {
-        console.error('Erro ao carregar dados:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
+  // ==========================================
+  // O ESCUDO DE CACHE (SWR)
+  // ==========================================
+  const { data, isLoading } = useSWR('dashboard-data', fetchDashboardData, {
+    dedupingInterval: 60000, // Proteção de 60 segundos (Não repete a requisição ao banco)
+    revalidateOnFocus: false // Não recarrega só porque o usuário mudou de aba no navegador
+  })
 
-    loadData()
-  }, [])
+  // Distribuindo os dados protegidos para as variáveis que o seu HTML já usa
+  const upcomingMatches = data?.upcoming || []
+  const finishedMatches = data?.finished || []
+  const allUsers = data?.users || []
+  const loading = isLoading
 
   useEffect(() => {
     const currentRef = paymentSectionRef.current;
     if (!currentRef) return;
 
     const observer = new IntersectionObserver(
-      ([entry]) => {
-        setIsPaymentVisible(entry.isIntersecting);
-      },
+      ([entry]) => setIsPaymentVisible(entry.isIntersecting),
       { threshold: 0.3 } 
     );
 
     observer.observe(currentRef);
-
-    return () => {
-      observer.unobserve(currentRef);
-    };
+    return () => observer.unobserve(currentRef);
   }, [allUsers, profile]);
 
+  // Funções auxiliares (MANTIDAS)
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
     return date.toLocaleDateString('pt-BR', {
@@ -74,13 +74,14 @@ export default function Dashboard() {
     return labels[phase] || phase
   }
 
+  // ATUALIZADO: Quando ele paga, nós avisamos o SWR para atualizar o Cache secretamente
   const handleNotifyPayment = async () => {
     if (!profile?.id) return;
     setPaymentLoading(true);
-    await profiles.notifyPayment(profile.id);
     
-    const { data } = await profiles.getAllProfiles();
-    if (data) setAllUsers(data);
+    await profiles.notifyPayment(profile.id);
+    await mutate('dashboard-data'); // Força o SWR a buscar os novos dados do banco
+    
     setPaymentLoading(false);
   }
 
@@ -91,13 +92,13 @@ export default function Dashboard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-lg animate-pulse">Carregando...</div>
+        <div className="text-lg animate-pulse">Carregando Dashboard...</div>
       </div>
     )
   }
 
-  const totalPrize = allUsers.filter(u => u.payment_status === 'paid').length * 15;
-  const myProfile = allUsers.find(u => u.id === profile?.id);
+  const totalPrize = allUsers.filter((u: any) => u.payment_status === 'paid').length * 15;
+  const myProfile = allUsers.find((u: any) => u.id === profile?.id);
 
   return (
     <div className="space-y-6 sm:space-y-8 max-w-6xl mx-auto relative">
