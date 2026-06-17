@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import useSWR from 'swr'
 import { ranking, profiles } from '@/lib/supabaseClient' 
 import type { Profile } from '@/types/database'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -7,34 +7,33 @@ import { Badge } from '@/components/ui/badge'
 import { Trophy, Medal, Award, BadgeDollarSign } from 'lucide-react' 
 import UserAvatar from '@/components/UserAvatar'
 
+// FUNÇÃO QUE BUSCA TUDO DE UMA VEZ
+const fetchRankingData = async () => {
+  const [rankingRes, profilesRes] = await Promise.all([
+    ranking.getLeaderboard(),
+    profiles.getAllProfiles()
+  ])
+  return {
+    leaderboard: rankingRes.data || [],
+    allUsers: profilesRes.data || []
+  }
+}
+
 export default function Ranking() {
-  const [leaderboard, setLeaderboard] = useState<Profile[]>([])
-  const [allUsers, setAllUsers] = useState<any[]>([]) 
-  const [loading, setLoading] = useState(true)
+  // ==========================================
+  // O ESCUDO DE CACHE (SWR) PARA O RANKING
+  // ==========================================
+  const { data, isLoading } = useSWR('ranking-data', fetchRankingData, {
+    dedupingInterval: 60000, // Proteção de 60 segundos
+    revalidateOnFocus: false // Evita recarregar ao mudar de aba
+  })
 
-  useEffect(() => {
-    async function loadData() {
-      try {
-        // Puxa o ranking e a lista de pagamentos ao mesmo tempo
-        const [rankingResponse, profilesResponse] = await Promise.all([
-          ranking.getLeaderboard(),
-          profiles.getAllProfiles()
-        ])
-        
-        setLeaderboard(rankingResponse.data || [])
-        setAllUsers(profilesResponse.data || [])
-      } catch (error) {
-        console.error('Erro ao carregar dados do ranking:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadData()
-  }, [])
+  // Extraindo os dados do cache
+  const leaderboard = data?.leaderboard || []
+  const allUsers = data?.allUsers || []
 
   // Calcula o prêmio baseado em quem está com status 'paid'
-  const totalPrize = allUsers.filter(u => u.payment_status === 'paid').length * 15
+  const totalPrize = allUsers.filter((u: any) => u.payment_status === 'paid').length * 15
 
   const getRankIcon = (rank: number) => {
     if (rank === 1) return <Trophy className="h-5 w-5 text-yellow-500" />
@@ -50,7 +49,7 @@ export default function Ranking() {
     return <Badge variant="outline">#{rank}</Badge>
   }
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-lg animate-pulse">Carregando Ranking...</div>
@@ -119,9 +118,7 @@ export default function Ranking() {
                 <TableBody>
                   {leaderboard.map((profile, index) => {
                     const rank = index + 1
-
-                    // Verifica se a pessoa no loop atual pagou para destacá-la
-                    const userPaymentStatus = allUsers.find(u => u.id === profile.id)?.payment_status
+                    const userPaymentStatus = allUsers.find((u: any) => u.id === profile.id)?.payment_status
 
                     return (
                       <TableRow 
@@ -135,8 +132,6 @@ export default function Ranking() {
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-                            
-                            {/* BLOCO COM A POSIÇÃO E O AVATAR */}
                             <div className="flex items-center gap-3 shrink-0">
                               <div className="w-8 flex justify-center">
                                 {getRankBadge(rank)}
@@ -152,7 +147,6 @@ export default function Ranking() {
                               <div className="font-bold text-base flex flex-wrap items-center gap-2">
                                 {profile.name}
                                 
-                                {/* TAG DO VENCEDOR NA LINHA DO PRIMEIRO COLOCADO */}
                                 {rank === 1 && totalPrize > 0 && (
                                   <span className="inline-flex items-center gap-1 text-[10px] font-black text-yellow-700 bg-yellow-400 px-2 py-0.5 rounded-full uppercase shadow-sm">
                                     <BadgeDollarSign className="h-3 w-3" />
@@ -230,7 +224,7 @@ export default function Ranking() {
           <CardContent>
             <div className="text-2xl font-black text-primary">
               {leaderboard.length > 0
-                ? Math.max(...leaderboard.map(p => p.exact_scores))
+                ? Math.max(...leaderboard.map((p: any) => p.exact_scores))
                 : 0}
             </div>
           </CardContent>

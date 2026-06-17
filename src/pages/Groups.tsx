@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import useSWR from 'swr'
 import { groups } from '@/lib/supabaseClient'
 import type { GroupStanding } from '@/types/database'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -7,41 +7,19 @@ import { Users, AlertCircle } from 'lucide-react'
 import TeamFlag from '@/components/TeamFlag'
 
 export default function Groups() {
-  const [allStandings, setAllStandings] = useState<Array<{ group: string; data: GroupStanding[] }>>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let isMounted = true
-
-    async function loadStandings() {
-      try {
-        setLoading(true)
-        setError(null)
-        const standings = await groups.getAllStandings()
-        if (isMounted) {
-          setAllStandings(standings)
-        }
-      } catch (error: any) {
-        console.error('Erro ao carregar classificações:', error)
-        if (isMounted) {
-          setError(error?.message || 'Erro ao carregar classificações. Verifique se o schema foi executado no banco de dados.')
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false)
-        }
-      }
+  // ==========================================
+  // O ESCUDO DE CACHE (SWR) PARA OS GRUPOS
+  // ==========================================
+  const { data: allStandings = [], error, isLoading } = useSWR(
+    'groups-standings', 
+    () => groups.getAllStandings(),
+    {
+      dedupingInterval: 60000, // Proteção de 60 segundos no cache
+      revalidateOnFocus: false // Evita recarregar ao mudar de aba no navegador
     }
+  )
 
-    loadStandings()
-
-    return () => {
-      isMounted = false
-    }
-  }, [])
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-lg animate-pulse">Carregando...</div>
@@ -58,7 +36,9 @@ export default function Groups() {
               <AlertCircle className="h-5 w-5 shrink-0" />
               <div>
                 <h3 className="font-medium">Erro ao carregar classificações</h3>
-                <p className="text-sm text-muted-foreground mt-1">{error}</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {error?.message || 'Erro ao carregar classificações. Verifique se o schema foi executado no banco de dados.'}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -80,7 +60,7 @@ export default function Groups() {
         {allStandings.map(({ group, data }) => {
           const safeData = data || []
           return (
-            <Card key={group} className="overflow-hidden">
+            <Card key={group} className="overflow-hidden shadow-sm hover:shadow-md transition-shadow">
               <CardHeader className="pb-3 sm:pb-6">
                 <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
                   <Users className="h-5 w-5 text-primary" />
@@ -97,7 +77,6 @@ export default function Groups() {
                     Nenhuma partida realizada ainda
                   </p>
                 ) : (
-                  /* AGORA USAMOS A BARRA ESCURA E FINA EM VEZ DE ESCONDER */
                   <div className="w-full pb-2 [&_div]:dark-scrollbar [&_div]:overflow-x-auto">
                     <Table className="min-w-[450px]">
                       <TableHeader>
