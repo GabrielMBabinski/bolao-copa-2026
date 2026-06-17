@@ -70,7 +70,7 @@ serve(async (req) => {
         })
         .eq('home_team_id', hId)
         .eq('away_team_id', aId)
-        .eq('phase', 'group')
+        
 
       if (!updateError) {
         console.log(`Sucesso: ${match.homeTeam.name} ${match.score?.fullTime?.home} - ${match.score?.fullTime?.away} ${match.awayTeam.name}`)
