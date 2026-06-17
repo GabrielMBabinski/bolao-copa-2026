@@ -105,14 +105,19 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', pre
   const [justSaved, setJustSaved] = useState(false) 
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (homeScore === '' || awayScore === '') return
-    
-    setSaving(true)
-    await onSave(match.id, Number(homeScore), Number(awayScore), predictionId)
-    setSaving(false)
-    
-    setJustSaved(true)
+  e.preventDefault();
+  
+  // TRAVA DE SEGURANÇA NO ENVIO
+  // Verificamos novamente no momento do clique se o jogo ainda está "pending"
+  const now = new Date();
+  const matchDate = new Date(match.match_date);
+  
+  if (now >= matchDate || match.status !== 'pending') {
+    alert("O jogo já começou ou foi encerrado! Não é possível atualizar palpites.");
+    return;
+  }
+
+  setSaving(true);
     if (onSavedCallback) {
       setTimeout(() => {
         setJustSaved(false)
