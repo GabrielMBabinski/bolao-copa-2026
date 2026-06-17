@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import useSWR, { mutate } from 'swr' // <-- Novo import do SWR
+import useSWR, { mutate } from 'swr'
 import { useAuth } from '@/hooks/useAuth'
 import { matches, predictions, supabase } from '@/lib/supabaseClient'
 import type { MatchWithTeams, PredictionWithMatch } from '@/types/database'
@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Target, Clock, Lock, Check, Users, X, GitMerge } from 'lucide-react'
 import TeamFlag from '@/components/TeamFlag'
 
-// --- FUNÇÕES AUXILIARES MANTIDAS ---
+// --- FUNÇÕES AUXILIARES ---
 const normalizeDate = (dateString: string) => {
   const formattedString = dateString.replace(' ', 'T')
   const hasTimezone = formattedString.includes('Z') || formattedString.match(/[+-]\d{2}:\d{2}$/)
@@ -34,8 +34,258 @@ const getPhaseLabel = (phase: string) => {
   return labels[phase] || phase
 }
 
-// ... (OS COMPONENTES FriendsPredictionsList, PredictionForm e KnockoutBracket CONTINUAM EXATAMENTE IGUAIS AQUI NO MEIO) ...
-// (Cole eles aqui do seu arquivo original para não perdê-los)
+// --- COMPONENTE DE LISTA DE AMIGOS ---
+const FriendsPredictionsList = ({ matchId, matchDate, timeOffset, isFinished }: { matchId: string, matchDate: string, timeOffset: number, isFinished: boolean }) => {
+  const [show, setShow] = useState(false)
+  const [list, setList] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+
+  const load = async () => {
+    setLoading(true)
+    try {
+      const realTime = new Date(new Date().getTime() + timeOffset)
+      if (normalizeDate(matchDate) > realTime) {
+        alert("🚨 PEGO NO PULO! O sistema detectou uma inconsistência no relógio.\n\nOs palpites da galera só serão liberados quando a bola rolar de verdade!")
+        setShow(false)
+        return
+      }
+
+      const { data, error } = await supabase
+        .from('predictions')
+        .select('home_score, away_score, points_earned, profiles(name)')
+        .eq('match_id', matchId)
+      
+      if (error) throw error
+      setList(data || [])
+    } catch (e) {
+      console.error(e)
+      alert("Erro ao carregar palpites.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="w-full mt-2">
+      <Button variant="outline" size="sm" className="w-full text-xs bg-muted/50 hover:bg-muted" onClick={() => {
+        if (!show) load()
+        setShow(!show)
+      }}>
+        <Users className="h-4 w-4 mr-2" />
+        {show ? 'Ocultar palpites da galera' : 'Ver palpites da galera'}
+      </Button>
+      {show && (
+        <div className="mt-3 p-3 bg-muted rounded-lg space-y-2">
+          {loading ? <div className="text-sm text-center animate-pulse">Carregando palpites...</div> :
+           list.length === 0 ? <div className="text-sm text-center">Ninguém mais palpitou.</div> :
+           list.map((p, i) => (
+            <div key={i} className="flex items-center justify-between text-sm bg-background p-2 rounded border border-border/50 shadow-sm">
+              <span className="truncate font-medium">{p.profiles?.name || 'Anônimo'}</span>
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="font-bold text-primary">{p.home_score} x {p.away_score}</Badge>
+                {isFinished && p.points_earned !== null && p.points_earned !== undefined && (
+                  <Badge className={`${p.points_earned > 0 ? "bg-green-600 text-white" : "bg-muted-foreground text-white"} ml-2 min-w-[50px] justify-center`}>
+                    {p.points_earned} pts
+                  </Badge>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// --- COMPONENTE DE FORMULÁRIO ---
+const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', predictionId, timeOffset, onSavedCallback }: { match: MatchWithTeams, onSave: (id: string, home: number, away: number, predId?: string) => Promise<void>, initialHome?: number | '', initialAway?: number | '', predictionId?: string, timeOffset: number, onSavedCallback?: () => void }) => {
+  const [homeScore, setHomeScore] = useState<number | ''>(initialHome)
+  const [awayScore, setAwayScore] = useState<number | ''>(initialAway)
+  const [saving, setSaving] = useState(false)
+  const [justSaved, setJustSaved] = useState(false) 
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (homeScore === '' || awayScore === '') return
+    
+    setSaving(true)
+    await onSave(match.id, Number(homeScore), Number(awayScore), predictionId)
+    setSaving(false)
+    
+    setJustSaved(true)
+    if (onSavedCallback) {
+      setTimeout(() => {
+        setJustSaved(false)
+        onSavedCallback()
+      }, 1000)
+    } else {
+      setTimeout(() => setJustSaved(false), 2000)
+    }
+  }
+
+  const realCurrentTime = new Date(new Date().getTime() + timeOffset)
+  // TRAVA DUPLA BLINDADA CONTRA MANIPULAÇÃO DE RELÓGIO:
+  const isLocked = normalizeDate(match.match_date) <= realCurrentTime || match.status !== 'pending'
+  const isFinished = match.status === 'finished'
+
+  const homeTeamName = match.home_team?.name || 'A Definir'
+  const awayTeamName = match.away_team?.name || 'A Definir'
+
+  return (
+    <div className={`p-4 border rounded-lg flex flex-col gap-4 ${isLocked ? 'opacity-80 bg-muted/10' : 'bg-card shadow-sm hover:shadow-md transition-all'}`}>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3">
+        <Badge variant={isLocked ? "secondary" : "outline"} className="w-fit">{getPhaseLabel(match.phase)}</Badge>
+        <div className="flex items-center gap-1 text-sm text-muted-foreground">
+          {isLocked ? <Lock className="h-4 w-4" /> : <Clock className="h-4 w-4" />}
+          {formatDate(match.match_date)}
+          {isLocked && <span className="ml-1 font-medium text-destructive">(Encerrado)</span>}
+        </div>
+      </div>
+
+      <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+        <div className="flex items-center justify-center gap-2 sm:gap-4 w-full md:w-auto flex-wrap">
+          <div className="flex flex-col items-center gap-1 min-w-[80px]">
+            {match.home_team?.flag_code ? <TeamFlag flagCode={match.home_team.flag_code} /> : <div className="w-8 h-6 bg-muted rounded"></div>}
+            <span className="font-medium text-sm text-center">{homeTeamName}</span>
+          </div>
+          <span className="text-muted-foreground text-sm font-bold bg-muted px-2 py-1 rounded-md">X</span>
+          <div className="flex flex-col items-center gap-1 min-w-[80px]">
+             {match.away_team?.flag_code ? <TeamFlag flagCode={match.away_team.flag_code} /> : <div className="w-8 h-6 bg-muted rounded"></div>}
+            <span className="font-medium text-sm text-center">{awayTeamName}</span>
+          </div>
+        </div>
+
+        {!isLocked && match.home_team && match.away_team ? (
+          <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto bg-muted/30 p-3 rounded-lg">
+            <div className="flex items-center gap-2">
+              <Input type="number" min="0" max="20" required value={homeScore} onChange={(e) => setHomeScore(e.target.value === '' ? '' : parseInt(e.target.value))} className="w-16 h-10 text-center font-bold text-lg" placeholder="0" />
+              <span className="text-muted-foreground font-bold">-</span>
+              <Input type="number" min="0" max="20" required value={awayScore} onChange={(e) => setAwayScore(e.target.value === '' ? '' : parseInt(e.target.value))} className="w-16 h-10 text-center font-bold text-lg" placeholder="0" />
+            </div>
+            
+            <Button 
+              type="submit" 
+              disabled={saving || justSaved} 
+              className={`w-full sm:w-auto transition-colors duration-300 ${justSaved ? 'bg-green-600 hover:bg-green-700 text-white' : ''}`}
+            >
+              {saving ? 'Salvando...' : justSaved ? 'Salvo! ✅' : predictionId ? 'Atualizar' : 'Salvar'}
+            </Button>
+          </form>
+        ) : !isLocked && (!match.home_team || !match.away_team) ? (
+          <Badge variant="outline" className="text-muted-foreground">Aguardando Seleções</Badge>
+        ) : null}
+      </div>
+
+      {isLocked && <FriendsPredictionsList matchId={match.id} matchDate={match.match_date} timeOffset={timeOffset} isFinished={isFinished} />}
+    </div>
+  )
+}
+
+// --- COMPONENTE: ÁRVORE DO MATA-MATA ---
+const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { allMatches: MatchWithTeams[], userPredictions: PredictionWithMatch[], onSave: any, timeOffset: number }) => {
+  const [selectedMatch, setSelectedMatch] = useState<{match: MatchWithTeams, pred: PredictionWithMatch | undefined} | null>(null)
+  
+  const phases = ['round_32', 'round_16', 'quarter', 'semi', 'final']
+
+  const BracketNode = ({ match }: { match: MatchWithTeams }) => {
+    const pred = userPredictions.find(p => p.match_id === match.id)
+    const realCurrentTime = new Date(new Date().getTime() + timeOffset)
+    const isLocked = normalizeDate(match.match_date) <= realCurrentTime || match.status !== 'pending'
+
+    const homeTeamName = match.home_team?.name || 'A Def.'
+    const awayTeamName = match.away_team?.name || 'A Def.'
+    const isReady = match.home_team && match.away_team
+
+    return (
+      <div 
+        onClick={() => { if (isReady) setSelectedMatch({ match, pred }) }}
+        className={`relative flex flex-col p-2 w-48 border rounded-lg shadow-sm transition-all
+          ${isLocked ? 'bg-muted/30 border-border/50' : isReady ? 'bg-card cursor-pointer hover:border-primary hover:shadow-md' : 'bg-muted/10 opacity-60'}
+        `}
+      >
+        <div className="text-[10px] text-muted-foreground mb-1 text-center border-b pb-1">
+          {formatDate(match.match_date).split(',')[0]}
+        </div>
+        
+        <div className="flex items-center justify-between py-1">
+          <div className="flex items-center gap-2 overflow-hidden">
+            {match.home_team?.flag_code ? <TeamFlag flagCode={match.home_team.flag_code} /> : <div className="w-5 h-4 bg-muted rounded"></div>}
+            <span className="text-xs font-medium truncate">{homeTeamName}</span>
+          </div>
+          <span className={`text-xs font-bold w-6 text-center rounded ${pred ? 'bg-primary/20 text-primary' : 'bg-muted'}`}>
+            {pred ? pred.home_score : '-'}
+          </span>
+        </div>
+
+        <div className="flex items-center justify-between py-1">
+          <div className="flex items-center gap-2 overflow-hidden">
+            {match.away_team?.flag_code ? <TeamFlag flagCode={match.away_team.flag_code} /> : <div className="w-5 h-4 bg-muted rounded"></div>}
+            <span className="text-xs font-medium truncate">{awayTeamName}</span>
+          </div>
+          <span className={`text-xs font-bold w-6 text-center rounded ${pred ? 'bg-primary/20 text-primary' : 'bg-muted'}`}>
+            {pred ? pred.away_score : '-'}
+          </span>
+        </div>
+
+        {match.status === 'finished' && pred && (
+           <div className={`absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm ${pred.points_earned > 0 ? 'bg-green-500' : 'bg-gray-400'}`}>
+             {pred.points_earned}
+           </div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="w-full">
+      <div className="bg-muted/20 border border-dashed rounded-xl p-4 overflow-x-auto custom-scrollbar">
+        <div className="flex gap-8 min-w-max pb-4">
+          {phases.map(phase => {
+            const phaseMatches = allMatches.filter(m => m.phase === phase).sort((a, b) => new Date(a.match_date).getTime() - new Date(b.match_date).getTime())
+            if (phaseMatches.length === 0) return null
+
+            return (
+              <div key={phase} className="flex flex-col gap-4 relative">
+                <h3 className="font-bold text-center text-sm uppercase tracking-wider text-muted-foreground sticky top-0 bg-background/90 py-1 rounded-md backdrop-blur-sm z-10">
+                  {getPhaseLabel(phase)}
+                </h3>
+                <div className="flex flex-col gap-6 justify-center flex-1 py-4">
+                  {phaseMatches.map(match => (
+                    <BracketNode key={match.id} match={match} />
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {selectedMatch && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="relative w-full max-w-lg bg-background rounded-xl shadow-2xl overflow-hidden">
+            <div className="flex justify-between items-center p-4 border-b bg-muted/30">
+              <h3 className="font-bold text-lg">Palpite do Mata-Mata</h3>
+              <Button variant="ghost" size="icon" onClick={() => setSelectedMatch(null)} className="h-8 w-8 rounded-full hover:bg-destructive/10 hover:text-destructive">
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+            <div className="p-4">
+              <PredictionForm 
+                match={selectedMatch.match} 
+                initialHome={selectedMatch.pred?.home_score} 
+                initialAway={selectedMatch.pred?.away_score}
+                predictionId={selectedMatch.pred?.id} 
+                onSave={onSave} 
+                timeOffset={timeOffset}
+                onSavedCallback={() => setSelectedMatch(null)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 // --- FUNÇÃO QUE BUSCA TUDO DE UMA VEZ ---
 const fetchPredictionsData = async (userId: string) => {
@@ -56,7 +306,6 @@ export default function Predictions() {
   const [timeOffset, setTimeOffset] = useState(0)
   const [activeTab, setActiveTab] = useState<string>('available')
 
-  // --- Sincronização do Relógio (Mantida, pois tem proteção try/catch) ---
   useEffect(() => {
     async function syncInternetTime() {
       try {
@@ -73,27 +322,21 @@ export default function Predictions() {
     syncInternetTime()
   }, [])
 
-  // ==========================================
-  // O ESCUDO DE CACHE (SWR) PARA OS PALPITES
-  // ==========================================
   const { data, isLoading } = useSWR(
-    user ? ['predictions-data', user.id] : null, // Chave única para este usuário
+    user ? ['predictions-data', user.id] : null,
     ([key, userId]) => fetchPredictionsData(userId as string),
     {
-      dedupingInterval: 30000, // Proteção de 30 segundos contra requisições duplicadas
-      revalidateOnFocus: false // Não gasta cota se ele minimizar e maximizar o navegador
+      dedupingInterval: 30000,
+      revalidateOnFocus: false
     }
   )
 
-  // Desestruturando os dados do Cache (sem precisar de useState)
   const userPredictions = data?.preds || []
   const allMatches = data?.all || []
 
-  // Filtra dinamicamente na hora os jogos disponíveis (sem useEffect)
   const predictedIds = new Set(userPredictions.map((p: any) => p.match_id))
   const availableMatches = allMatches.filter((m: any) => !predictedIds.has(m.id) && m.status === 'pending' && m.phase === 'group')
 
-  // Lógica de Transição Automática para a Árvore
   useEffect(() => {
     if (allMatches.length === 0) return
     const realTime = new Date(new Date().getTime() + timeOffset)
@@ -114,9 +357,6 @@ export default function Predictions() {
       const { error } = await predictions.upsertPrediction(payload)
       if (error) throw error
 
-      // --- O PULO DO GATO ---
-      // Dizemos ao SWR para "revalidar" a chave deste usuário no fundo.
-      // Ele faz a leitura nova sem recarregar a tela, atualizando a UI instantaneamente!
       mutate(['predictions-data', user.id])
       
     } catch (error) {
@@ -157,17 +397,17 @@ export default function Predictions() {
         </TabsContent>
 
         <TabsContent value="my-predictions" className="space-y-4 max-w-4xl mx-auto">
-          {userPredictions.filter(p => p.match.phase === 'group').length === 0 ? (
+          {userPredictions.filter((p: any) => p.match.phase === 'group').length === 0 ? (
              <Card className="py-12 flex flex-col items-center text-muted-foreground">
                <Target className="h-12 w-12 mb-4 opacity-50" />
                <p>Você ainda não palpitou na fase de grupos</p>
              </Card>
           ) : (
             userPredictions
-              .filter(p => p.match.phase === 'group')
-              .map((pred) => {
+              .filter((p: any) => p.match.phase === 'group')
+              .map((pred: any) => {
               const realCurrentTime = new Date(new Date().getTime() + timeOffset)
-              const isLocked = normalizeDate(pred.match.match_date) <= realCurrentTime
+              const isLocked = normalizeDate(pred.match.match_date) <= realCurrentTime || pred.match.status !== 'pending'
               const isFinished = pred.match.status === 'finished'
 
               if (!isLocked) {
@@ -240,7 +480,7 @@ export default function Predictions() {
               <h2 className="text-2xl font-black uppercase tracking-wider text-primary flex items-center justify-center gap-2">
                 <GitMerge className="h-6 w-6" /> Rumo à Final
               </h2>
-              <p className="text-muted-foreground mt-1">Em breve...</p>
+              <p className="text-muted-foreground mt-1">Toque nos confrontos para salvar os seus palpites do mata-mata.</p>
             </div>
             <div className="p-4 sm:p-6">
               <KnockoutBracket 
