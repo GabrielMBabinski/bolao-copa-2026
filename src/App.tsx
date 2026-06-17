@@ -7,6 +7,7 @@ import Groups from './pages/Groups'
 import Predictions from './pages/Predictions'
 import Ranking from './pages/Ranking'
 import Admin from './pages/Admin'
+import Profile from './pages/Profile'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -66,6 +67,7 @@ function App() {
             <Route path="grupos" element={<Groups />} />
             <Route path="palpites" element={<Predictions />} />
             <Route path="ranking" element={<Ranking />} />
+            <Route path="/profile" element={<Profile />} />
             <Route
               path="admin"
               element={

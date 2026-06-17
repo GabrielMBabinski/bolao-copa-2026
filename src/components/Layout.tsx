@@ -116,13 +116,17 @@ export default function Layout() {
                 {isDark ? <Sun className="h-5 w-5 text-yellow-400" /> : <Moon className="h-5 w-5 text-foreground" />}
               </button>
 
-              {/* BLOCO DO AVATAR + NOME DO USUÁRIO */}
-              <div className="flex items-center space-x-2 bg-muted/40 pl-2 pr-3 py-1 rounded-full border border-border/40">
+              {/* BLOCO DO AVATAR + NOME DO USUÁRIO (AGORA CLICÁVEL) */}
+              <Link 
+                to="/profile"
+                className="flex items-center space-x-2 bg-muted/40 hover:bg-muted/80 transition-colors pl-2 pr-3 py-1 rounded-full border border-border/40 cursor-pointer"
+                title="Editar Perfil"
+              >
                 <UserAvatar name={profile?.name || user?.email} url={profile?.avatar_url} className="w-7 h-7 text-xs" />
                 <span className="text-sm font-medium text-foreground truncate max-w-[120px]">
                   {profile?.name || user?.email}
                 </span>
-              </div>
+              </Link>
               
               <Button
                 variant="ghost"
@@ -144,8 +148,10 @@ export default function Layout() {
                 {isDark ? <Sun className="h-5 w-5 text-yellow-400" /> : <Moon className="h-5 w-5 text-foreground" />}
               </button>
 
-              {/* Pequeno indicador visual do utilizador mesmo com o menu fechado */}
-              <UserAvatar name={profile?.name || user?.email} url={profile?.avatar_url} className="w-7 h-7 text-xs mr-1" />
+              {/* Pequeno indicador visual do utilizador (AGORA CLICÁVEL) */}
+              <Link to="/profile">
+                <UserAvatar name={profile?.name || user?.email} url={profile?.avatar_url} className="w-7 h-7 text-xs mr-1 hover:opacity-80 transition-opacity" />
+              </Link>
 
               <button
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -182,19 +188,23 @@ export default function Layout() {
               })}
             </div>
             
-            {/* SEÇÃO DO PERFIL REESTRUTURADA NO MOBILE */}
+            {/* SEÇÃO DO PERFIL REESTRUTURADA NO MOBILE (AGORA CLICÁVEL) */}
             <div className="pt-4 border-t flex flex-col space-y-3">
-              <div className="flex items-center space-x-3 px-3 py-1">
+              <Link 
+                to="/profile" 
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="flex items-center space-x-3 px-3 py-2 rounded-md hover:bg-muted transition-colors cursor-pointer"
+              >
                 <UserAvatar name={profile?.name || user?.email} url={profile?.avatar_url} className="w-10 h-10 text-base" />
                 <div className="flex flex-col min-w-0">
                   <span className="text-sm font-bold text-foreground truncate">
                     {profile?.name || 'Utilizador'}
                   </span>
                   <span className="text-xs text-muted-foreground truncate">
-                    {user?.email}
+                    Editar foto de perfil
                   </span>
                 </div>
-              </div>
+              </Link>
 
               <Button
                 variant="destructive"
