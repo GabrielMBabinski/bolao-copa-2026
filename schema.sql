@@ -1,14 +1,19 @@
--- Habilitar extensão para UUID
+-- ==========================================
+-- 1. EXTENSÕES E SEGURANÇA INICIAL
+-- ==========================================
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Habilitar Row Level Security
 ALTER TABLE auth.users ENABLE ROW LEVEL SECURITY;
+
+-- ==========================================
+-- 2. CRIAÇÃO DAS TABELAS
+-- ==========================================
 
 -- Tabela de Seleções (Teams)
 CREATE TABLE teams (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name TEXT NOT NULL,
-  flag_code TEXT NOT NULL, -- Código de 2 ou 3 letras para a bandeira (ex: BRA, ARG)
+  flag_code TEXT NOT NULL, 
   group_name TEXT NOT NULL CHECK (group_name IN ('A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L')),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -22,6 +27,8 @@ CREATE TABLE profiles (
   is_admin BOOLEAN DEFAULT FALSE,
   total_points INTEGER DEFAULT 0,
   exact_scores INTEGER DEFAULT 0,
+  amount_paid DECIMAL(10,2) DEFAULT 0.00,
+  payment_status TEXT DEFAULT 'unpaid',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -36,8 +43,8 @@ CREATE TABLE matches (
   away_team_id UUID REFERENCES teams(id) ON DELETE CASCADE NOT NULL,
   match_date TIMESTAMP WITH TIME ZONE NOT NULL,
   phase match_phase NOT NULL DEFAULT 'group',
-  home_score INTEGER,
-  away_score INTEGER,
+  home_score INTEGER CHECK (home_score >= 0 AND home_score <= 50),
+  away_score INTEGER CHECK (away_score >= 0 AND away_score <= 50),
   status match_status NOT NULL DEFAULT 'pending',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -53,15 +60,17 @@ CREATE TABLE predictions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
   match_id UUID REFERENCES matches(id) ON DELETE CASCADE NOT NULL,
-  home_score INTEGER NOT NULL CHECK (home_score >= 0),
-  away_score INTEGER NOT NULL CHECK (away_score >= 0),
+  home_score INTEGER NOT NULL CHECK (home_score >= 0 AND home_score <= 50),
+  away_score INTEGER NOT NULL CHECK (away_score >= 0 AND away_score <= 50),
   points_earned INTEGER DEFAULT 0,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   CONSTRAINT unique_user_match UNIQUE (user_id, match_id)
 );
 
--- Índices para performance
+-- ==========================================
+-- 3. ÍNDICES DE PERFORMANCE
+-- ==========================================
 CREATE INDEX idx_matches_date ON matches(match_date);
 CREATE INDEX idx_matches_status ON matches(status);
 CREATE INDEX idx_matches_phase ON matches(phase);
@@ -69,7 +78,9 @@ CREATE INDEX idx_predictions_user ON predictions(user_id);
 CREATE INDEX idx_predictions_match ON predictions(match_id);
 CREATE INDEX idx_profiles_points ON profiles(total_points DESC, exact_scores DESC);
 
--- Trigger para atualizar updated_at
+-- ==========================================
+-- 4. TRIGGERS BÁSICOS (UPDATED_AT)
+-- ==========================================
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -78,19 +89,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER update_teams_updated_at BEFORE UPDATE ON teams
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_teams_updated_at BEFORE UPDATE ON teams FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_profiles_updated_at BEFORE UPDATE ON profiles FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_matches_updated_at BEFORE UPDATE ON matches FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_predictions_updated_at BEFORE UPDATE ON predictions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_profiles_updated_at BEFORE UPDATE ON profiles
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_matches_updated_at BEFORE UPDATE ON matches
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_predictions_updated_at BEFORE UPDATE ON predictions
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
--- Função para calcular pontos de um palpite
+-- ==========================================
+-- 5. LÓGICA DE NEGÓCIO E PONTUAÇÃO (SERVER-SIDE)
+-- ==========================================
 CREATE OR REPLACE FUNCTION calculate_prediction_points(
   p_home_score INTEGER,
   p_away_score INTEGER,
@@ -105,44 +111,28 @@ DECLARE
   actual_goal_diff INTEGER;
 BEGIN
   -- Determinar vencedor do palpite
-  IF p_home_score > p_away_score THEN
-    predicted_winner := 'home';
-  ELSIF p_away_score > p_home_score THEN
-    predicted_winner := 'away';
-  ELSE
-    predicted_winner := 'draw';
-  END IF;
+  IF p_home_score > p_away_score THEN predicted_winner := 'home';
+  ELSIF p_away_score > p_home_score THEN predicted_winner := 'away';
+  ELSE predicted_winner := 'draw'; END IF;
 
   -- Determinar vencedor real
-  IF m_home_score > m_away_score THEN
-    actual_winner := 'home';
-  ELSIF m_away_score > m_home_score THEN
-    actual_winner := 'away';
-  ELSE
-    actual_winner := 'draw';
-  END IF;
+  IF m_home_score > m_away_score THEN actual_winner := 'home';
+  ELSIF m_away_score > m_home_score THEN actual_winner := 'away';
+  ELSE actual_winner := 'draw'; END IF;
 
   -- Calcular saldo de gols
   predicted_goal_diff := p_home_score - p_away_score;
   actual_goal_diff := m_home_score - m_away_score;
 
-  -- 5 pontos: Placar exato
-  IF p_home_score = m_home_score AND p_away_score = m_away_score THEN
-    points := 5;
-  -- 3 pontos: Acertar vencedor e saldo de gols
-  ELSIF predicted_winner = actual_winner AND predicted_goal_diff = actual_goal_diff THEN
-    points := 3;
-  -- 1 ponto: Acertar apenas o vencedor ou empate
-  ELSIF predicted_winner = actual_winner THEN
-    points := 1;
-  END IF;
+  -- Distribuição de Pontos
+  IF p_home_score = m_home_score AND p_away_score = m_away_score THEN points := 5;
+  ELSIF predicted_winner = actual_winner AND predicted_goal_diff = actual_goal_diff THEN points := 3;
+  ELSIF predicted_winner = actual_winner THEN points := 1; END IF;
 
   RETURN points;
 END;
 $$ LANGUAGE plpgsql;
 
--- Stored Procedure para calcular pontos de todos os palpites de uma partida
--- e atualizar o total_points na tabela profiles
 CREATE OR REPLACE FUNCTION calculate_match_points(match_uuid UUID)
 RETURNS VOID AS $$
 DECLARE
@@ -150,49 +140,24 @@ DECLARE
   points INTEGER;
   is_exact BOOLEAN;
 BEGIN
-  -- Para cada palpite da partida
-  FOR prediction_record IN
-    SELECT id, user_id, home_score, away_score
-    FROM predictions
-    WHERE match_id = match_uuid
+  FOR prediction_record IN SELECT id, user_id, home_score, away_score FROM predictions WHERE match_id = match_uuid
   LOOP
-    -- Calcular pontos
-    SELECT calculate_prediction_points(
-      prediction_record.home_score,
-      prediction_record.away_score,
-      m.home_score,
-      m.away_score
-    ) INTO points
-    FROM matches m
-    WHERE m.id = match_uuid;
+    SELECT calculate_prediction_points(prediction_record.home_score, prediction_record.away_score, m.home_score, m.away_score) INTO points
+    FROM matches m WHERE m.id = match_uuid;
 
-    -- Verificar se é placar exato
-    is_exact := (
-      prediction_record.home_score = (SELECT home_score FROM matches WHERE id = match_uuid)
-      AND prediction_record.away_score = (SELECT away_score FROM matches WHERE id = match_uuid)
-    );
+    is_exact := (prediction_record.home_score = (SELECT home_score FROM matches WHERE id = match_uuid) AND prediction_record.away_score = (SELECT away_score FROM matches WHERE id = match_uuid));
 
-    -- Atualizar o palpite
-    UPDATE predictions
-    SET points_earned = points
-    WHERE id = prediction_record.id;
+    UPDATE predictions SET points_earned = points WHERE id = prediction_record.id;
 
-    -- Atualizar o total_points do usuário
     IF is_exact THEN
-      UPDATE profiles
-      SET total_points = total_points + points,
-          exact_scores = exact_scores + 1
-      WHERE id = prediction_record.user_id;
+      UPDATE profiles SET total_points = total_points + points, exact_scores = exact_scores + 1 WHERE id = prediction_record.user_id;
     ELSE
-      UPDATE profiles
-      SET total_points = total_points + points
-      WHERE id = prediction_record.user_id;
+      UPDATE profiles SET total_points = total_points + points WHERE id = prediction_record.user_id;
     END IF;
   END LOOP;
 END;
 $$ LANGUAGE plpgsql;
 
--- Trigger para calcular pontos automaticamente quando uma partida é finalizada
 CREATE OR REPLACE FUNCTION trigger_match_points_calculation()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -207,168 +172,121 @@ CREATE TRIGGER calculate_points_on_match_finished
 AFTER UPDATE OF status ON matches
 FOR EACH ROW EXECUTE FUNCTION trigger_match_points_calculation();
 
--- Row Level Security (RLS) Policies
+-- ==========================================
+-- 6. CÃES DE GUARDA (TRIGGERS ANTI-FRAUDE)
+-- ==========================================
+CREATE OR REPLACE FUNCTION fiscaliza_pontos_palpites()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN NEW.points_earned := 0; END IF;
+  IF TG_OP = 'UPDATE' AND auth.uid() = NEW.user_id THEN NEW.points_earned := OLD.points_earned; END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
--- Profiles: Todos podem ler, apenas o próprio usuário pode atualizar
+CREATE TRIGGER trg_bloqueia_fraude_pontos 
+BEFORE INSERT OR UPDATE ON predictions 
+FOR EACH ROW EXECUTE FUNCTION fiscaliza_pontos_palpites();
+
+CREATE OR REPLACE FUNCTION fiscaliza_update_perfil()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF auth.uid() = NEW.id THEN
+    NEW.is_admin := OLD.is_admin;
+    NEW.total_points := OLD.total_points;
+    NEW.exact_scores := OLD.exact_scores;
+    NEW.payment_status := OLD.payment_status;
+    NEW.amount_paid := OLD.amount_paid;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_bloqueia_fraude_perfil 
+BEFORE UPDATE ON profiles 
+FOR EACH ROW EXECUTE FUNCTION fiscaliza_update_perfil();
+
+-- ==========================================
+-- 7. SEGURANÇA A NÍVEL DE LINHA (RLS POLICIES)
+-- ==========================================
+
+-- Profiles
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Profiles podem ser lidos por todos" ON profiles FOR SELECT USING (true);
+CREATE POLICY "Usuários podem atualizar seu próprio perfil" ON profiles FOR UPDATE USING (auth.uid() = id);
+CREATE POLICY "Usuários podem inserir seu próprio perfil" ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
 
-CREATE POLICY "Profiles podem ser lidos por todos"
-  ON profiles FOR SELECT
-  USING (true);
-
-CREATE POLICY "Usuários podem atualizar seu próprio perfil"
-  ON profiles FOR UPDATE
-  USING (auth.uid() = id);
-
-CREATE POLICY "Usuários podem inserir seu próprio perfil"
-  ON profiles FOR INSERT
-  WITH CHECK (auth.uid() = id);
-
--- Teams: Todos podem ler, apenas admins podem escrever
+-- Teams
 ALTER TABLE teams ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Teams podem ser lidos por todos" ON teams FOR SELECT USING (true);
+CREATE POLICY "Apenas admins podem inserir teams" ON teams FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = true));
+CREATE POLICY "Apenas admins podem atualizar teams" ON teams FOR UPDATE USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = true));
 
-CREATE POLICY "Teams podem ser lidos por todos"
-  ON teams FOR SELECT
-  USING (true);
-
-CREATE POLICY "Apenas admins podem inserir teams"
-  ON teams FOR INSERT
-  WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = true
-    )
-  );
-
-CREATE POLICY "Apenas admins podem atualizar teams"
-  ON teams FOR UPDATE
-  USING (
-    EXISTS (
-      SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = true
-    )
-  );
-
--- Matches: Todos podem ler, apenas admins podem escrever
+-- Matches
 ALTER TABLE matches ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Matches podem ser lidos por todos" ON matches FOR SELECT USING (true);
+CREATE POLICY "Apenas admins podem inserir matches" ON matches FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = true));
+CREATE POLICY "Apenas admins podem atualizar matches" ON matches FOR UPDATE USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = true));
 
-CREATE POLICY "Matches podem ser lidos por todos"
-  ON matches FOR SELECT
-  USING (true);
-
-CREATE POLICY "Apenas admins podem inserir matches"
-  ON matches FOR INSERT
-  WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = true
-    )
-  );
-
-CREATE POLICY "Apenas admins podem atualizar matches"
-  ON matches FOR UPDATE
-  USING (
-    EXISTS (
-      SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = true
-    )
-  );
-
--- Predictions: Todos podem ler, apenas o próprio usuário pode inserir/atualizar
--- E apenas antes do horário da partida
+-- Predictions (TOTALMENTE BLINDADO)
 ALTER TABLE predictions ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Predictions podem ser lidos por todos"
-  ON predictions FOR SELECT
-  USING (true);
+CREATE POLICY "Leitura_Blindada_Palpites" ON predictions FOR SELECT
+USING (user_id = auth.uid() OR (SELECT match_date FROM matches WHERE id = match_id) < NOW());
 
-CREATE POLICY "Usuários podem inserir seus próprios palpites"
-  ON predictions FOR INSERT
-  WITH CHECK (
-    auth.uid() = user_id
-    AND created_at < (SELECT match_date FROM matches WHERE id = match_id)
-  );
+CREATE POLICY "Insert_Blindado_Palpites" ON predictions FOR INSERT
+WITH CHECK (auth.uid() = user_id AND NOW() < (SELECT match_date FROM matches WHERE id = match_id));
 
-CREATE POLICY "Usuários podem atualizar seus próprios palpites"
-  ON predictions FOR UPDATE
-  USING (
-    auth.uid() = user_id
-    AND updated_at < (SELECT match_date FROM matches WHERE id = match_id)
-  );
+CREATE POLICY "Update_Blindado_Palpites" ON predictions FOR UPDATE
+USING (auth.uid() = user_id AND NOW() < (SELECT match_date FROM matches WHERE id = match_id));
 
--- Função para criar perfil automaticamente quando um usuário é criado
+-- ==========================================
+-- 8. AUTOMAÇÃO E VIEWS
+-- ==========================================
+
+-- Cadastro de Novo Usuário (Forçando is_admin a false)
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, name, is_admin, total_points, exact_scores)
+  INSERT INTO public.profiles (id, name, is_admin, total_points, exact_scores, amount_paid, payment_status)
   VALUES (
     NEW.id,
     COALESCE(NEW.raw_user_meta_data->>'name', 'Usuário'),
-    COALESCE((NEW.raw_user_meta_data->>'is_admin')::boolean, false),
+    false, -- Impossibilita o usuário de se promover a admin na criação da conta
     0,
-    0
+    0,
+    0.00,
+    'unpaid'
   );
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Trigger para criar perfil automaticamente
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- Função auxiliar para calcular classificação de grupos
+-- Tabela de Classificação dos Grupos
 CREATE OR REPLACE FUNCTION calculate_group_standings(group_letter TEXT)
 RETURNS TABLE (
-  team_id UUID,
-  team_name TEXT,
-  flag_code TEXT,
-  played INTEGER,
-  won INTEGER,
-  drawn INTEGER,
-  lost INTEGER,
-  goals_for INTEGER,
-  goals_against INTEGER,
-  goal_diff INTEGER,
-  points INTEGER
+  team_id UUID, team_name TEXT, flag_code TEXT, played INTEGER, won INTEGER, drawn INTEGER, lost INTEGER, goals_for INTEGER, goals_against INTEGER, goal_diff INTEGER, points INTEGER
 ) AS $$
 BEGIN
   RETURN QUERY
   WITH team_stats AS (
     SELECT
-      t.id AS team_id,
-      t.name AS team_name,
-      t.flag_code,
+      t.id AS team_id, t.name AS team_name, t.flag_code,
       COALESCE(COUNT(m.id), 0) AS played,
-      COALESCE(SUM(CASE 
-        WHEN (m.home_team_id = t.id AND m.home_score > m.away_score) OR
-             (m.away_team_id = t.id AND m.away_score > m.home_score)
-        THEN 1 ELSE 0 END
-      ), 0) AS won,
-      COALESCE(SUM(CASE 
-        WHEN m.home_score = m.away_score
-        THEN 1 ELSE 0 END
-      ), 0) AS drawn,
-      COALESCE(SUM(CASE 
-        WHEN (m.home_team_id = t.id AND m.home_score < m.away_score) OR
-             (m.away_team_id = t.id AND m.away_score < m.home_score)
-        THEN 1 ELSE 0 END
-      ), 0) AS lost,
+      COALESCE(SUM(CASE WHEN (m.home_team_id = t.id AND m.home_score > m.away_score) OR (m.away_team_id = t.id AND m.away_score > m.home_score) THEN 1 ELSE 0 END), 0) AS won,
+      COALESCE(SUM(CASE WHEN m.home_score = m.away_score THEN 1 ELSE 0 END), 0) AS drawn,
+      COALESCE(SUM(CASE WHEN (m.home_team_id = t.id AND m.home_score < m.away_score) OR (m.away_team_id = t.id AND m.away_score < m.home_score) THEN 1 ELSE 0 END), 0) AS lost,
       COALESCE(SUM(CASE WHEN m.home_team_id = t.id THEN m.home_score ELSE m.away_score END), 0) AS goals_for,
       COALESCE(SUM(CASE WHEN m.home_team_id = t.id THEN m.away_score ELSE m.home_score END), 0) AS goals_against
     FROM teams t
-    LEFT JOIN matches m ON (m.home_team_id = t.id OR m.away_team_id = t.id)
-      AND m.status = 'finished'
-      AND m.phase = 'group'
+    LEFT JOIN matches m ON (m.home_team_id = t.id OR m.away_team_id = t.id) AND m.status = 'finished' AND m.phase = 'group'
     WHERE t.group_name = group_letter
     GROUP BY t.id, t.name, t.flag_code
   )
   SELECT
-    team_id,
-    team_name,
-    flag_code,
-    played,
-    won,
-    drawn,
-    lost,
-    goals_for,
-    goals_against,
+    team_id, team_name, flag_code, played, won, drawn, lost, goals_for, goals_against,
     COALESCE(goals_for, 0) - COALESCE(goals_against, 0) AS goal_diff,
     (COALESCE(won, 0) * 3) + COALESCE(drawn, 0) AS points
   FROM team_stats

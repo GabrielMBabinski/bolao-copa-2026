@@ -26,91 +26,91 @@ serve(async (req) => {
       )
     }
 
-    // Initialize Supabase client with service role key for admin privileges
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    // Fetch today's matches from football-data.org
-    // World Cup 2026 competition ID is 2002 (this may need to be updated)
-    const today = new Date().toISOString().split('T')[0]
-    const apiUrl = `https://api.football-data.org/v4/competitions/2002/matches?dateFrom=${today}&dateTo=${today}`
+    // ==========================================
+    // 1. CORREÇÃO: JANELA DE 3 DIAS (Fuso Horário)
+    // ==========================================
+    const hoje = new Date()
+    
+    const ontem = new Date(hoje)
+    ontem.setDate(ontem.getDate() - 1)
+    
+    const amanha = new Date(hoje)
+    amanha.setDate(amanha.getDate() + 1)
 
-    console.log(`Fetching matches from football-data.org for ${today}`)
+    const dateFrom = ontem.toISOString().split('T')[0]
+    const dateTo = amanha.toISOString().split('T')[0]
+    const apiUrl = `https://api.football-data.org/v4/competitions/2000/matches?dateFrom=${dateFrom}&dateTo=${dateTo}`
+
+    console.log(`Buscando jogos de ${dateFrom} até ${dateTo}...`)
 
     const response = await fetch(apiUrl, {
-      headers: {
-        'X-Auth-Token': footballDataToken,
-      },
+      headers: { 'X-Auth-Token': footballDataToken },
     })
 
     if (!response.ok) {
       const errorText = await response.text()
       console.error('Football-data.org API error:', errorText)
-      return new Response(
-        JSON.stringify({ error: 'Failed to fetch from football-data.org', details: errorText }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      throw new Error('Falha ao buscar dados na API')
     }
 
     const data = await response.json()
     const matches = data.matches || []
 
-    console.log(`Found ${matches.length} matches for ${today}`)
+    console.log(`Encontrados ${matches.length} jogos no período.`)
 
     if (matches.length === 0) {
       return new Response(
-        JSON.stringify({ message: 'No matches found for today', updated: 0 }),
+        JSON.stringify({ message: 'Nenhum jogo encontrado', updated: 0 }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // Get all teams from database to create a mapping
-    const { data: teams } = await supabase
-      .from('teams')
-      .select('id, name, flag_code')
+    // Pega times do banco para mapear IDs
+    const { data: teams } = await supabase.from('teams').select('id, name, flag_code')
 
-    if (!teams) {
-      console.error('No teams found in database')
-      return new Response(
-        JSON.stringify({ error: 'No teams found in database' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
+    if (!teams) throw new Error('Nenhum time encontrado no banco de dados.')
 
-    // Create team name mapping (normalize names for matching)
     const teamMap = new Map()
     teams.forEach((team) => {
       teamMap.set(team.name.toLowerCase(), team.id)
-      // Add common variations
       teamMap.set(team.flag_code.toLowerCase(), team.id)
     })
 
     let updatedCount = 0
     const updateErrors: string[] = []
 
-    // Process each finished match
+    // Processar as partidas
     for (const match of matches) {
-      if (match.status !== 'FINISHED') {
-        continue
+      const apiStatus = match.status
+
+      // ==========================================
+      // 2. CORREÇÃO: ACEITAR JOGOS AO VIVO
+      // ==========================================
+      if (!['IN_PLAY', 'PAUSED', 'FINISHED'].includes(apiStatus)) {
+        continue // Pula apenas o que não começou ou foi cancelado/adiado
       }
+
+      // Traduz o status da API para o status do seu banco (enum)
+      const dbStatus = apiStatus === 'FINISHED' ? 'finished' : 'in_progress'
 
       const homeTeamName = match.homeTeam.name
       const awayTeamName = match.awayTeam.name
-      const homeScore = match.score.fullTime.home
-      const awayScore = match.score.fullTime.away
+      
+      // Na API v4, o placar ao vivo (e final) fica no objeto fullTime
+      const homeScore = match.score?.fullTime?.home ?? 0
+      const awayScore = match.score?.fullTime?.away ?? 0
 
-      // Find team IDs in our database
-      const homeTeamId = teamMap.get(homeTeamName.toLowerCase()) ||
-                         teamMap.get(homeTeamName.toLowerCase().replace(/\s/g, ''))
-      const awayTeamId = teamMap.get(awayTeamName.toLowerCase()) ||
-                         teamMap.get(awayTeamName.toLowerCase().replace(/\s/g, ''))
+      // Encontra IDs
+      const homeTeamId = teamMap.get(homeTeamName.toLowerCase()) || teamMap.get(homeTeamName.toLowerCase().replace(/\s/g, ''))
+      const awayTeamId = teamMap.get(awayTeamName.toLowerCase()) || teamMap.get(awayTeamName.toLowerCase().replace(/\s/g, ''))
 
       if (!homeTeamId || !awayTeamId) {
-        console.warn(`Could not find team IDs for ${homeTeamName} vs ${awayTeamName}`)
-        updateErrors.push(`Teams not found: ${homeTeamName} vs ${awayTeamName}`)
+        console.warn(`Times não mapeados: ${homeTeamName} vs ${awayTeamName}`)
         continue
       }
 
-      // Find the corresponding match in our database
       const { data: existingMatch } = await supabase
         .from('matches')
         .select('id, status')
@@ -119,51 +119,39 @@ serve(async (req) => {
         .eq('phase', 'group')
         .single()
 
-      if (!existingMatch) {
-        console.warn(`Match not found in database: ${homeTeamName} vs ${awayTeamName}`)
-        updateErrors.push(`Match not found: ${homeTeamName} vs ${awayTeamName}`)
-        continue
-      }
+      if (!existingMatch) continue
 
-      // Only update if not already finished
-      if (existingMatch.status === 'finished') {
-        console.log(`Match already finished: ${homeTeamName} vs ${awayTeamName}`)
-        continue
-      }
+      // Se no NOSSO banco já consta como finalizado, não altera mais.
+      if (existingMatch.status === 'finished') continue
 
-      // Update the match with the result
+      // Atualiza o jogo! (Seja Ao Vivo ou Finalizado)
       const { error: updateError } = await supabase
         .from('matches')
         .update({
           home_score: homeScore,
           away_score: awayScore,
-          status: 'finished',
+          status: dbStatus,
           updated_at: new Date().toISOString(),
         })
         .eq('id', existingMatch.id)
 
       if (updateError) {
-        console.error(`Error updating match ${existingMatch.id}:`, updateError)
-        updateErrors.push(`Update failed: ${homeTeamName} vs ${awayTeamName}`)
+        console.error(`Erro ao atualizar ${homeTeamName}:`, updateError)
+        updateErrors.push(`Falha no update: ${homeTeamName}`)
         continue
       }
 
-      console.log(`Updated match: ${homeTeamName} ${homeScore} - ${awayScore} ${awayTeamName}`)
+      console.log(`Sucesso: ${homeTeamName} ${homeScore} - ${awayScore} ${awayTeamName} (${dbStatus})`)
       updatedCount++
     }
 
     return new Response(
-      JSON.stringify({
-        message: 'Sync completed',
-        totalMatches: matches.length,
-        updatedMatches: updatedCount,
-        errors: updateErrors,
-      }),
+      JSON.stringify({ message: 'Sync completo', updatedMatches: updatedCount, errors: updateErrors }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 
-  } catch (error) {
-    console.error('Error in sync-matches function:', error)
+  } catch (error: any) {
+    console.error('Erro na Edge Function:', error)
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
