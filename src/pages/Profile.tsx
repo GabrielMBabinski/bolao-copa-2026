@@ -21,24 +21,33 @@ export default function Profile() {
       }
 
       const file = event.target.files[0]
+
+      // --- TRAVA DE SEGURANÇA: LIMITE DE 2MB ---
+      const maxSizeInBytes = 2 * 1024 * 1024; // 2MB em Bytes
+      if (file.size > maxSizeInBytes) {
+        alert('A imagem é muito grande! Por favor, escolha uma foto com menos de 2MB.')
+        setUploading(false)
+        return // Para a execução do código aqui, impedindo o upload
+      }
+      // -----------------------------------------
+
       const fileExt = file.name.split('.').pop()
-      // Cria um nome de arquivo único para não sobrescrever acidentalmente
       const fileName = `${user?.id}-${Math.random()}.${fileExt}`
       const filePath = `${fileName}`
 
-      // 1. Faz o upload da imagem para o bucket "avatars"
+      // Faz o upload da imagem para o bucket "avatars"
       const { error: uploadError } = await supabase.storage
         .from('avatars')
         .upload(filePath, file, { upsert: true })
 
       if (uploadError) throw uploadError
 
-      // 2. Pega a URL pública da imagem recém-enviada
+      // Pega a URL pública
       const { data: { publicUrl } } = supabase.storage
         .from('avatars')
         .getPublicUrl(filePath)
 
-      // 3. Atualiza a tabela profiles com a nova URL
+      // Atualiza a tabela
       const { error: updateError } = await supabase
         .from('profiles')
         .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
@@ -48,13 +57,11 @@ export default function Profile() {
 
       setAvatarUrl(publicUrl)
       alert('Foto de perfil atualizada com sucesso!')
-      
-      // Opcional: Recarregar a página para forçar a atualização do avatar na Navbar
       window.location.reload()
 
     } catch (error: any) {
       console.error('Erro no upload:', error.message)
-      alert('Erro ao atualizar a foto. Tente uma imagem menor.')
+      alert('Erro ao atualizar a foto. Tente novamente.')
     } finally {
       setUploading(false)
     }
@@ -71,7 +78,7 @@ export default function Profile() {
         <CardHeader>
           <CardTitle>Foto de Perfil</CardTitle>
           <CardDescription>
-            Escolha uma imagem para ser exibida ao lado do seu nome.
+            Escolha uma imagem de 400x400 a 800x800 pixels para ser exibida ao lado do seu nome.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col items-center gap-6 py-6">
