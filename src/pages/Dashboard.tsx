@@ -111,8 +111,8 @@ export default function Dashboard() {
 
       <div className="relative w-full h-40 sm:h-64 md:h-80 rounded-2xl overflow-hidden mb-8 shadow-xl border border-muted group">
         <img 
-          src="/neymar-banner.jpg" 
-          alt="Neymar Copa 2026" 
+          src="/Endrick-banner.jpg" 
+          alt="Endrick Copa 2026" 
           className="w-full h-full object-cover object-top transition-transform duration-700 group-hover:scale-105"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
