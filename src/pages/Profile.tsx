@@ -22,20 +22,31 @@ export default function Profile() {
 
       const file = event.target.files[0]
 
-      // --- TRAVA DE SEGURANÇA: LIMITE DE 2MB ---
-      const maxSizeInBytes = 2 * 1024 * 1024; // 2MB em Bytes
+      // Trava de segurança: Limite de 2MB
+      const maxSizeInBytes = 2 * 1024 * 1024;
       if (file.size > maxSizeInBytes) {
         alert('A imagem é muito grande! Por favor, escolha uma foto com menos de 2MB.')
         setUploading(false)
-        return // Para a execução do código aqui, impedindo o upload
+        return
       }
-      // -----------------------------------------
+
+      // --- NOVO: Lógica para apagar a foto antiga ---
+      if (profile?.avatar_url) {
+        // A URL pública tem o formato: .../public/avatars/nome-do-arquivo.jpg
+        const urlParts = profile.avatar_url.split('/avatars/')
+        if (urlParts.length === 2) {
+          const oldFilePath = urlParts[1]
+          // Manda apagar o ficheiro antigo do bucket
+          await supabase.storage.from('avatars').remove([oldFilePath])
+        }
+      }
+      // ----------------------------------------------
 
       const fileExt = file.name.split('.').pop()
       const fileName = `${user?.id}-${Math.random()}.${fileExt}`
       const filePath = `${fileName}`
 
-      // Faz o upload da imagem para o bucket "avatars"
+      // Faz o upload da imagem NOVA para o bucket
       const { error: uploadError } = await supabase.storage
         .from('avatars')
         .upload(filePath, file, { upsert: true })
@@ -47,7 +58,7 @@ export default function Profile() {
         .from('avatars')
         .getPublicUrl(filePath)
 
-      // Atualiza a tabela
+      // Atualiza a tabela profiles
       const { error: updateError } = await supabase
         .from('profiles')
         .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
