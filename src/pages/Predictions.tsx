@@ -494,7 +494,7 @@ export default function Predictions() {
               <h2 className="text-2xl font-black uppercase tracking-wider text-primary flex items-center justify-center gap-2">
                 <GitMerge className="h-6 w-6" /> Rumo à Final
               </h2>
-              <p className="text-muted-foreground mt-1">Toque nos confrontos para salvar os seus palpites do mata-mata.</p>
+              <p className="text-muted-foreground mt-1">Em breve...</p>
             </div>
             <div className="p-4 sm:p-6">
               <KnockoutBracket 
