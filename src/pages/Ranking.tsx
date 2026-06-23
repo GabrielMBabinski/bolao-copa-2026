@@ -32,8 +32,17 @@ export default function Ranking() {
   const leaderboard = data?.leaderboard || []
   const allUsers = data?.allUsers || []
 
-  // Calcula o prêmio baseado em quem está com status 'paid'
-const totalPrize = allUsers.filter(u => u.payment_status === 'paid' && u.contributes_to_prize).length * 15  
+  // Calcula o prêmio baseado em quem está com status 'paid' E contribui para o prêmio
+  const totalPrize = allUsers.filter((u: any) => u.payment_status === 'paid' && u.contributes_to_prize).length * 15  
+
+  // ==========================================
+  // REGRA DO VERDADEIRO VENCEDOR (ELEGÍVEL)
+  // Descobre quem é o 1º colocado que realmente pagou oficialmente
+  // ==========================================
+  const eligibleWinner = leaderboard.find((profile: any) => {
+    const userDetails = allUsers.find((u: any) => u.id === profile.id)
+    return userDetails?.payment_status === 'paid' && userDetails?.contributes_to_prize
+  })
 
   const getRankIcon = (rank: number) => {
     if (rank === 1) return <Trophy className="h-5 w-5 text-yellow-500" />
@@ -123,7 +132,8 @@ const totalPrize = allUsers.filter(u => u.payment_status === 'paid' && u.contrib
                     return (
                       <TableRow 
                         key={profile.id} 
-                        className={rank === 1 ? 'bg-yellow-500/5 hover:bg-yellow-500/10 transition-colors' : ''}
+                        // Destaque amarelado na linha apenas para quem REALMENTE está a levar a grana
+                        className={profile.id === eligibleWinner?.id ? 'bg-yellow-500/5 hover:bg-yellow-500/10 transition-colors' : ''}
                       >
                         <TableCell>
                           <div className="flex items-center justify-center">
@@ -147,7 +157,8 @@ const totalPrize = allUsers.filter(u => u.payment_status === 'paid' && u.contrib
                               <div className="font-bold text-base flex flex-wrap items-center gap-2">
                                 {profile.name}
                                 
-                                {rank === 1 && totalPrize > 0 && (
+                                {/* TAG DO PRÊMIO APENAS PARA O ELEGÍVEL */}
+                                {profile.id === eligibleWinner?.id && totalPrize > 0 && (
                                   <span className="inline-flex items-center gap-1 text-[10px] font-black text-yellow-700 bg-yellow-400 px-2 py-0.5 rounded-full uppercase shadow-sm">
                                     <BadgeDollarSign className="h-3 w-3" />
                                     Leva os R$ {totalPrize.toFixed(2).replace('.', ',')}
@@ -158,7 +169,8 @@ const totalPrize = allUsers.filter(u => u.payment_status === 'paid' && u.contrib
                                 {profile.is_admin && (
                                   <Badge variant="outline" className="text-[10px] h-4">Admin</Badge>
                                 )}
-                                {userPaymentStatus === 'paid' && rank !== 1 && (
+                                {/* Badge de 'Aposta Paga' não precisa aparecer para o vencedor para não poluir, só para os demais elegíveis */}
+                                {userPaymentStatus === 'paid' && profile.id !== eligibleWinner?.id && (
                                   <span className="text-[10px] font-medium text-green-600 flex items-center gap-1">
                                     Aposta Paga
                                   </span>
