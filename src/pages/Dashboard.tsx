@@ -97,8 +97,8 @@ export default function Dashboard() {
     )
   }
 
-  const totalPrize = allUsers.filter((u: any) => u.payment_status === 'paid').length * 15;
-  const myProfile = allUsers.find((u: any) => u.id === profile?.id);
+const totalPrize = allUsers.filter(u => u.payment_status === 'paid' && u.contributes_to_prize).length * 15  
+const myProfile = allUsers.find((u: any) => u.id === profile?.id);
 
   return (
     <div className="space-y-6 sm:space-y-8 max-w-6xl mx-auto relative">

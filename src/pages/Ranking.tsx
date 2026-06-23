@@ -33,7 +33,7 @@ export default function Ranking() {
   const allUsers = data?.allUsers || []
 
   // Calcula o prêmio baseado em quem está com status 'paid'
-  const totalPrize = allUsers.filter((u: any) => u.payment_status === 'paid').length * 15
+const totalPrize = allUsers.filter(u => u.payment_status === 'paid' && u.contributes_to_prize).length * 15  
 
   const getRankIcon = (rank: number) => {
     if (rank === 1) return <Trophy className="h-5 w-5 text-yellow-500" />

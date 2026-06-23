@@ -42,6 +42,7 @@ export interface Database {
           avatar_url: string | null
           is_admin: boolean
           payment_status: 'unpaid' | 'pending' | 'paid'
+          contributes_to_prize: boolean // <-- NOVA COLUNA AQUI
           total_points: number
           exact_scores: number
           created_at: string
@@ -53,6 +54,7 @@ export interface Database {
           avatar_url?: string | null
           is_admin?: boolean
           payment_status?: 'unpaid' | 'pending' | 'paid'
+          contributes_to_prize?: boolean // <-- NOVA COLUNA AQUI
           total_points?: number
           exact_scores?: number
           created_at?: string
@@ -64,6 +66,7 @@ export interface Database {
           avatar_url?: string | null
           is_admin?: boolean
           payment_status?: 'unpaid' | 'pending' | 'paid'
+          contributes_to_prize?: boolean // <-- NOVA COLUNA AQUI
           total_points?: number
           exact_scores?: number
           created_at?: string
