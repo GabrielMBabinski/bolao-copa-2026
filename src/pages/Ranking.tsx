@@ -1,10 +1,10 @@
 import useSWR from 'swr'
-import { ranking, profiles } from '@/lib/supabaseClient' 
+import { ranking, profiles } from '@/lib/supabaseClient'
 import type { Profile } from '@/types/database'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { Trophy, Medal, Award, BadgeDollarSign } from 'lucide-react' 
+import { Trophy, Medal, Award, BadgeDollarSign } from 'lucide-react'
 import UserAvatar from '@/components/UserAvatar'
 
 // FUNÇÃO QUE BUSCA TUDO DE UMA VEZ
@@ -33,7 +33,7 @@ export default function Ranking() {
   const allUsers = data?.allUsers || []
 
   // Calcula o prêmio baseado em quem está com status 'paid' E contribui para o prêmio
-  const totalPrize = allUsers.filter((u: any) => u.payment_status === 'paid' && u.contributes_to_prize).length * 15  
+  const totalPrize = allUsers.filter((u: any) => u.payment_status === 'paid' && u.contributes_to_prize).length * 15
 
   // ==========================================
   // REGRA DO VERDADEIRO VENCEDOR (ELEGÍVEL)
@@ -127,11 +127,12 @@ export default function Ranking() {
                 <TableBody>
                   {leaderboard.map((profile, index) => {
                     const rank = index + 1
-                    const userPaymentStatus = allUsers.find((u: any) => u.id === profile.id)?.payment_status
-
+                    const userDetails = allUsers.find((u: any) => u.id === profile.id)
+                    const userPaymentStatus = userDetails?.payment_status
+                    const userContributes = userDetails?.contributes_to_prize
                     return (
-                      <TableRow 
-                        key={profile.id} 
+                      <TableRow
+                        key={profile.id}
                         // Destaque amarelado na linha apenas para quem REALMENTE está a levar a grana
                         className={profile.id === eligibleWinner?.id ? 'bg-yellow-500/5 hover:bg-yellow-500/10 transition-colors' : ''}
                       >
@@ -146,17 +147,17 @@ export default function Ranking() {
                               <div className="w-8 flex justify-center">
                                 {getRankBadge(rank)}
                               </div>
-                              <UserAvatar 
-                                name={profile.name || 'UK'} 
-                                url={profile.avatar_url} 
-                                className="w-8 h-8 sm:w-10 sm:h-10 text-sm border-primary/30 shadow-sm" 
+                              <UserAvatar
+                                name={profile.name || 'UK'}
+                                url={profile.avatar_url}
+                                className="w-8 h-8 sm:w-10 sm:h-10 text-sm border-primary/30 shadow-sm"
                               />
                             </div>
-                            
+
                             <div className="flex flex-col items-start">
                               <div className="font-bold text-base flex flex-wrap items-center gap-2">
                                 {profile.name}
-                                
+
                                 {/* TAG DO PRÊMIO APENAS PARA O ELEGÍVEL */}
                                 {profile.id === eligibleWinner?.id && totalPrize > 0 && (
                                   <span className="inline-flex items-center gap-1 text-[10px] font-black text-yellow-700 bg-yellow-400 px-2 py-0.5 rounded-full uppercase shadow-sm">
@@ -170,7 +171,7 @@ export default function Ranking() {
                                   <Badge variant="outline" className="text-[10px] h-4">Admin</Badge>
                                 )}
                                 {/* Badge de 'Aposta Paga' não precisa aparecer para o vencedor para não poluir, só para os demais elegíveis */}
-                                {userPaymentStatus === 'paid' && profile.id !== eligibleWinner?.id && (
+                                {userPaymentStatus === 'paid' && userContributes && profile.id !== eligibleWinner?.id && (
                                   <span className="text-[10px] font-medium text-green-600 flex items-center gap-1">
                                     Aposta Paga
                                   </span>
