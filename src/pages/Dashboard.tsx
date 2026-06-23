@@ -29,6 +29,17 @@ export default function Dashboard() {
   const [isPaymentVisible, setIsPaymentVisible] = useState(false)
   const paymentSectionRef = useRef<HTMLDivElement>(null)
 
+  const [showPoster, setShowPoster] = useState(true)
+
+  // NOVO: Temporizador de 5 segundos
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowPoster(false)
+    }, 5000) // 5000 = 5 segundos
+    
+    return () => clearTimeout(timer)
+  }, [])
+
   // ==========================================
   // O ESCUDO DE CACHE (SWR)
   // ==========================================
@@ -111,19 +122,31 @@ export default function Dashboard() {
       </div>
 
       <div className="relative w-full h-40 sm:h-64 md:h-80 rounded-2xl overflow-hidden mb-8 shadow-xl border border-muted group bg-black">
-        {/* O vídeo substitui a imagem aqui */}
+        
+        {/* VÍDEO (Fica rodando no fundo) */}
         <video
-          src="/cristiano-ronaldo-4k.webm" /* ou .webm */
+          src="/cristiano-ronaldo-4k.mp4"
           autoPlay
           loop
           muted
           playsInline
-          className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105 pointer-events-none"
+          className="absolute inset-0 w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105 pointer-events-none"
         />
 
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
+        {/* CAPA (Some suavemente após 5 segundos) */}
+        <img
+          src="/cristiano-capa.jpeg" /* Substitua pelo nome real da sua imagem */
+          alt="Capa do Banner"
+          className={`absolute inset-0 w-full h-full object-cover object-center transition-all duration-1000 ease-in-out z-10 pointer-events-none group-hover:scale-105 ${
+            showPoster ? 'opacity-100' : 'opacity-0'
+          }`}
+        />
 
-        <div className="absolute bottom-4 left-4 md:bottom-8 md:left-8">
+        {/* GRADIENTE (Para escurecer o fundo) - Agora com z-20 para ficar por cima de tudo */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent z-20 pointer-events-none"></div>
+
+        {/* TEXTOS - Com z-30 para nunca serem cobertos */}
+        <div className="absolute bottom-4 left-4 md:bottom-8 md:left-8 z-30">
           <h2 className="text-2xl sm:text-4xl md:text-5xl font-black text-white drop-shadow-lg uppercase tracking-wider">
             Rumo ao Hexa!
           </h2>
