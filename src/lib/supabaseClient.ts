@@ -67,13 +67,15 @@ export const profiles = {
   getProfile: async (id: string) => {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, name, is_admin, payment_status, avatar_url') 
+      // NOVA COLUNA ADICIONADA AQUI:
+      .select('id, name, is_admin, payment_status, avatar_url, contributes_to_prize') 
       .eq('id', id)
       .single()
     return { data, error }
   },
 
   updateProfile: async (userId: string, updates: Partial<Database['public']['Tables']['profiles']['Update']>) => {
+    // ... (este pode deixar como está)
     const { data, error } = await supabase
       .from('profiles')
       .update(updates)
@@ -86,7 +88,8 @@ export const profiles = {
   getAllProfiles: async () => {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, name, payment_status, avatar_url')
+      // NOVA COLUNA ADICIONADA AQUI:
+      .select('id, name, payment_status, avatar_url, contributes_to_prize')
       .order('name')
     return { data, error }
   },
@@ -249,8 +252,8 @@ export const ranking = {
   getLeaderboard: async () => {
     const { data, error } = await supabase
       .from('profiles')
-      // Adicionamos o created_at e updated_at no final para o TypeScript parar de chorar
-      .select('id, name, total_points, exact_scores, is_admin, payment_status, avatar_url, created_at, updated_at')
+      // NOVA COLUNA ADICIONADA AQUI:
+      .select('id, name, total_points, exact_scores, is_admin, payment_status, avatar_url, contributes_to_prize, created_at, updated_at')
       .order('total_points', { ascending: false })
       .order('exact_scores', { ascending: false })
     return { data, error }
