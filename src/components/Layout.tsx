@@ -6,12 +6,13 @@ import { Button } from './ui/button'
 import UserAvatar from '@/components/UserAvatar' 
 import AnnoyingPaywall from '@/components/AnnoyingPaywall'
 import FakeAds from '@/components/FakeAds'
+import AudioPlayer from '@/components/AudioPlayer'
+import { startAudioOnInteract } from '@/lib/audio' // <-- IMPORTAÇÃO DO ÁUDIO AQUI
 
 export default function Layout() {
   const { user, profile, signOut } = useAuth()
   const location = useLocation()
 
-  // Estado para controlar se o menu de celular está aberto ou fechado
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
   // --- LÓGICA DO MODO ESCURO ---
@@ -37,20 +38,13 @@ export default function Layout() {
 
   // --- ARMADILHA ANTI-HACKER (F12) ---
   useEffect(() => {
-    // Só ativa a armadilha em produção para não te atrapalhar enquanto você programa!
     if (import.meta.env.DEV) return; 
 
     const antiHackerTrap = setInterval(() => {
       const before = new Date().getTime()
-      
-      // O 'debugger' congela o navegador inteiro se o F12 (DevTools) estiver aberto
       debugger; 
-      
       const after = new Date().getTime()
-      
-      // Se a diferença for maior que 100ms, é porque o debugger pausou a execução
       if (after - before > 100) {
-        // Punição: recarrega a página na cara dele
         window.location.reload()
       }
     }, 1000)
@@ -71,15 +65,14 @@ export default function Layout() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background relative">
       <AnnoyingPaywall />
       <FakeAds />
       <nav className="sticky top-0 z-50 w-full border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60">
         <div className="container mx-auto px-4">
           <div className="flex h-16 items-center justify-between">
             
-            {/* LADO ESQUERDO: Logo e Nome */}
-            <Link to="/" className="flex items-center space-x-2">
+            <Link to="/" onClick={startAudioOnInteract} className="flex items-center space-x-2">
               <Trophy className="h-6 w-6 text-primary" />
               <span className="text-xl font-bold truncate">Bolão Copa 2026</span>
             </Link>
@@ -93,6 +86,7 @@ export default function Layout() {
                   <Link
                     key={item.path}
                     to={item.path}
+                    onClick={startAudioOnInteract} // <-- DISPARA O ÁUDIO AO CLICAR
                     className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                       isActive
                         ? 'bg-primary text-primary-foreground'
@@ -116,9 +110,9 @@ export default function Layout() {
                 {isDark ? <Sun className="h-5 w-5 text-yellow-400" /> : <Moon className="h-5 w-5 text-foreground" />}
               </button>
 
-              {/* BLOCO DO AVATAR + NOME DO USUÁRIO (AGORA CLICÁVEL) */}
               <Link 
                 to="/profile"
+                onClick={startAudioOnInteract}
                 className="flex items-center space-x-2 bg-muted/40 hover:bg-muted/80 transition-colors pl-2 pr-3 py-1 rounded-full border border-border/40 cursor-pointer"
                 title="Editar Perfil"
               >
@@ -148,8 +142,7 @@ export default function Layout() {
                 {isDark ? <Sun className="h-5 w-5 text-yellow-400" /> : <Moon className="h-5 w-5 text-foreground" />}
               </button>
 
-              {/* Pequeno indicador visual do utilizador (AGORA CLICÁVEL) */}
-              <Link to="/profile">
+              <Link to="/profile" onClick={startAudioOnInteract}>
                 <UserAvatar name={profile?.name || user?.email} url={profile?.avatar_url} className="w-7 h-7 text-xs mr-1 hover:opacity-80 transition-opacity" />
               </Link>
 
@@ -174,7 +167,10 @@ export default function Layout() {
                   <Link
                     key={item.path}
                     to={item.path}
-                    onClick={() => setIsMobileMenuOpen(false)}
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      startAudioOnInteract(); // <-- DISPARA O ÁUDIO NO MOBILE
+                    }}
                     className={`flex items-center space-x-2 px-3 py-3 rounded-md text-base font-medium transition-colors ${
                       isActive
                         ? 'bg-primary text-primary-foreground'
@@ -188,11 +184,13 @@ export default function Layout() {
               })}
             </div>
             
-            {/* SEÇÃO DO PERFIL REESTRUTURADA NO MOBILE (AGORA CLICÁVEL) */}
             <div className="pt-4 border-t flex flex-col space-y-3">
               <Link 
                 to="/profile" 
-                onClick={() => setIsMobileMenuOpen(false)}
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  startAudioOnInteract();
+                }}
                 className="flex items-center space-x-3 px-3 py-2 rounded-md hover:bg-muted transition-colors cursor-pointer"
               >
                 <UserAvatar name={profile?.name || user?.email} url={profile?.avatar_url} className="w-10 h-10 text-base" />
@@ -222,6 +220,9 @@ export default function Layout() {
       <main className="container mx-auto px-4 py-8">
         <Outlet />
       </main>
+      
+      {/* O COMPONENTE DE ÁUDIO RENDERIZADO AQUI NO FINAL */}
+      <AudioPlayer />
     </div>
   )
 }
