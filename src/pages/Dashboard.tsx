@@ -32,13 +32,13 @@ export default function Dashboard() {
   const [showPoster, setShowPoster] = useState(true)
 
   // NOVO: Temporizador de 5 segundos
-  useEffect(() => {
+  {/*useEffect(() => {
     const timer = setTimeout(() => {
       setShowPoster(false)
     }, 5000) // 5000 = 5 segundos
     
     return () => clearTimeout(timer)
-  }, [])
+  }, [])*/}
 
   // ==========================================
   // O ESCUDO DE CACHE (SWR)
@@ -124,18 +124,18 @@ export default function Dashboard() {
       <div className="relative w-full h-40 sm:h-64 md:h-80 rounded-2xl overflow-hidden mb-8 shadow-xl border border-muted group bg-black">
         
         {/* VÍDEO (Fica rodando no fundo) */}
-        <video
+        {/*<video
           src="/cristiano-ronaldo-4k.mp4"
           autoPlay
           loop
           muted
           playsInline
           className="absolute inset-0 w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105 pointer-events-none"
-        />
+        />*/}
 
         {/* CAPA (Some suavemente após 5 segundos) */}
         <img
-          src="/cristiano-capa.jpeg"
+          src="/Endrick-banner.png"
           alt="Capa do Banner"
           className={`absolute inset-0 w-full h-full object-cover object-center transition-all duration-1000 ease-in-out z-10 pointer-events-none group-hover:scale-105 ${
             showPoster ? 'opacity-100' : 'opacity-0'

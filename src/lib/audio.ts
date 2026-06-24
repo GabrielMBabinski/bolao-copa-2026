@@ -1,6 +1,6 @@
 // src/lib/audio.ts
 
-export const siteAudio = new Audio('/Cristiano-audio.mp3');
+export const siteAudio = new Audio('/Endrick-musica.mp3');
 siteAudio.loop = true;
 siteAudio.volume = 1.0; 
 
