@@ -1,6 +1,6 @@
 // src/lib/audio.ts
 
-export const siteAudio = new Audio('/Endrick-musica.mp3');
+export const siteAudio = new Audio('/Kylian-dictador.mp3');
 siteAudio.loop = true;
 siteAudio.volume = 1.0; 
 
