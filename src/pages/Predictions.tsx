@@ -52,7 +52,7 @@ const FriendsPredictionsList = ({ matchId, matchDate, timeOffset, isFinished }: 
 
       const { data, error } = await supabase
         .from('predictions')
-        .select('home_score, away_score, points_earned, profiles(name)')
+        .select('home_score, away_score, penalty_winner, points_earned, profiles(name)')
         .eq('match_id', matchId)
 
       if (error) throw error
@@ -82,7 +82,11 @@ const FriendsPredictionsList = ({ matchId, matchDate, timeOffset, isFinished }: 
                 <div key={i} className="flex items-center justify-between text-sm bg-background p-2 rounded border border-border/50 shadow-sm">
                   <span className="truncate font-medium">{p.profiles?.name || 'Anônimo'}</span>
                   <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="font-bold text-primary">{p.home_score} x {p.away_score}</Badge>
+                    <Badge variant="secondary" className="font-bold text-primary">
+                      {p.home_score} x {p.away_score}
+                      {/* Mostra asterisco se empatou e escolheu alguem nos penaltis */}
+                      {p.home_score === p.away_score && p.penalty_winner && <span className="text-yellow-500 ml-1">*</span>}
+                    </Badge>
                     {isFinished && p.points_earned !== null && p.points_earned !== undefined && (
                       <Badge className={`${p.points_earned > 0 ? "bg-green-600 text-white" : "bg-muted-foreground text-white"} ml-2 min-w-[50px] justify-center`}>
                         {p.points_earned} pts
@@ -98,20 +102,28 @@ const FriendsPredictionsList = ({ matchId, matchDate, timeOffset, isFinished }: 
 }
 
 // --- COMPONENTE DE FORMULÁRIO ---
-const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', predictionId, timeOffset, onSavedCallback }: { match: MatchWithTeams, onSave: (id: string, home: number, away: number, predId?: string) => Promise<void>, initialHome?: number | '', initialAway?: number | '', predictionId?: string, timeOffset: number, onSavedCallback?: () => void }) => {
+const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', initialPenaltyWinner = null, predictionId, timeOffset, onSavedCallback }: { match: MatchWithTeams, onSave: (id: string, home: number, away: number, penaltyWinner: 'home'|'away'|null, predId?: string) => Promise<void>, initialHome?: number | '', initialAway?: number | '', initialPenaltyWinner?: 'home'|'away'|null, predictionId?: string, timeOffset: number, onSavedCallback?: () => void }) => {
   const [homeScore, setHomeScore] = useState<number | ''>(initialHome)
   const [awayScore, setAwayScore] = useState<number | ''>(initialAway)
+  const [penaltyWinner, setPenaltyWinner] = useState<'home' | 'away' | null>(initialPenaltyWinner)
   const [saving, setSaving] = useState(false)
   const [justSaved, setJustSaved] = useState(false)
+
+  // Verificações para a regra do Mata-Mata
+  const isKnockout = match.phase !== 'group'
+  const isTie = homeScore !== '' && awayScore !== '' && Number(homeScore) === Number(awayScore)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validação básica para evitar palpites vazios
     if (homeScore === '' || awayScore === '') return;
 
-    // TRAVA DE SEGURANÇA NO ENVIO
-    // Verificamos novamente no momento do clique se o jogo ainda está "pending"
+    // BLOQUEIO: Se for mata-mata e o palpite for empate, obriga a escolher o vencedor dos pênaltis
+    if (isKnockout && isTie && !penaltyWinner) {
+      alert("Jogo de mata-mata empatado! Por favor, selecione abaixo quem se classifica nos pênaltis.");
+      return;
+    }
+
     const now = new Date();
     const matchDate = new Date(match.match_date);
 
@@ -123,8 +135,8 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', pre
     setSaving(true);
 
     try {
-      // ESTA É A LINHA QUE FALTAVA: A requisição real para o banco de dados!
-      await onSave(match.id, Number(homeScore), Number(awayScore), predictionId);
+      // Passamos o penaltyWinner (apenas se for empate, caso contrário passamos null)
+      await onSave(match.id, Number(homeScore), Number(awayScore), isTie ? penaltyWinner : null, predictionId);
 
       setJustSaved(true);
       if (onSavedCallback) {
@@ -137,15 +149,12 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', pre
       }
     } catch (err) {
       console.error("Falha ao salvar:", err);
-      // O erro do Supabase ou de RLS agora vai aparecer no console e não vai travar a tela
     } finally {
-      // O 'finally' garante que o botão destrava, mesmo se a internet cair
       setSaving(false);
     }
   }
 
   const realCurrentTime = new Date(new Date().getTime() + timeOffset)
-  // TRAVA DUPLA BLINDADA CONTRA MANIPULAÇÃO DE RELÓGIO:
   const isLocked = normalizeDate(match.match_date) <= realCurrentTime || match.status !== 'pending'
   const isFinished = match.status === 'finished'
 
@@ -177,20 +186,51 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', pre
         </div>
 
         {!isLocked && match.home_team && match.away_team ? (
-          <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto bg-muted/30 p-3 rounded-lg">
-            <div className="flex items-center gap-2">
-              <Input type="number" min="0" max="20" required value={homeScore} onChange={(e) => setHomeScore(e.target.value === '' ? '' : parseInt(e.target.value))} className="w-16 h-10 text-center font-bold text-lg" placeholder="0" />
-              <span className="text-muted-foreground font-bold">-</span>
-              <Input type="number" min="0" max="20" required value={awayScore} onChange={(e) => setAwayScore(e.target.value === '' ? '' : parseInt(e.target.value))} className="w-16 h-10 text-center font-bold text-lg" placeholder="0" />
+          <form onSubmit={handleSubmit} className="flex flex-col w-full md:w-auto bg-muted/30 p-3 rounded-lg gap-3">
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Input type="number" min="0" max="20" required value={homeScore} onChange={(e) => setHomeScore(e.target.value === '' ? '' : parseInt(e.target.value))} className="w-16 h-10 text-center font-bold text-lg" placeholder="0" />
+                <span className="text-muted-foreground font-bold">-</span>
+                <Input type="number" min="0" max="20" required value={awayScore} onChange={(e) => setAwayScore(e.target.value === '' ? '' : parseInt(e.target.value))} className="w-16 h-10 text-center font-bold text-lg" placeholder="0" />
+              </div>
+
+              <Button
+                type="submit"
+                disabled={saving || justSaved}
+                className={`w-full sm:w-auto transition-colors duration-300 ${justSaved ? 'bg-green-600 hover:bg-green-700 text-white' : ''}`}
+              >
+                {saving ? 'Salvando...' : justSaved ? 'Salvo! ✅' : predictionId ? 'Atualizar' : 'Salvar'}
+              </Button>
             </div>
 
-            <Button
-              type="submit"
-              disabled={saving || justSaved}
-              className={`w-full sm:w-auto transition-colors duration-300 ${justSaved ? 'bg-green-600 hover:bg-green-700 text-white' : ''}`}
-            >
-              {saving ? 'Salvando...' : justSaved ? 'Salvo! ✅' : predictionId ? 'Atualizar' : 'Salvar'}
-            </Button>
+            {/* SELETOR DE PÊNALTIS (Aparece dinamicamente com animação) */}
+            {isKnockout && isTie && (
+              <div className="w-full bg-yellow-500/10 border border-yellow-500/20 p-3 rounded-xl text-center space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                <p className="text-xs font-bold text-yellow-600 uppercase tracking-wider">
+                  Empate! Quem passa nos pênaltis?
+                </p>
+                <div className="flex justify-center gap-2 sm:gap-4">
+                  <Button
+                    type="button"
+                    variant={penaltyWinner === 'home' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setPenaltyWinner('home')}
+                    className="text-xs font-bold w-full sm:w-auto"
+                  >
+                    {homeTeamName}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={penaltyWinner === 'away' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setPenaltyWinner('away')}
+                    className="text-xs font-bold w-full sm:w-auto"
+                  >
+                    {awayTeamName}
+                  </Button>
+                </div>
+              </div>
+            )}
           </form>
         ) : !isLocked && (!match.home_team || !match.away_team) ? (
           <Badge variant="outline" className="text-muted-foreground">Aguardando Seleções</Badge>
@@ -204,12 +244,12 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', pre
 
 // --- COMPONENTE: ÁRVORE DO MATA-MATA ---
 const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { allMatches: MatchWithTeams[], userPredictions: PredictionWithMatch[], onSave: any, timeOffset: number }) => {
-  const [selectedMatch, setSelectedMatch] = useState<{ match: MatchWithTeams, pred: PredictionWithMatch | undefined } | null>(null)
+  const [selectedMatch, setSelectedMatch] = useState<{ match: MatchWithTeams, pred: any } | null>(null)
 
   const phases = ['round_32', 'round_16', 'quarter', 'semi', 'final']
 
   const BracketNode = ({ match }: { match: MatchWithTeams }) => {
-    const pred = userPredictions.find(p => p.match_id === match.id)
+    const pred: any = userPredictions.find(p => p.match_id === match.id)
     const realCurrentTime = new Date(new Date().getTime() + timeOffset)
     const isLocked = normalizeDate(match.match_date) <= realCurrentTime || match.status !== 'pending'
 
@@ -231,7 +271,11 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
         <div className="flex items-center justify-between py-1">
           <div className="flex items-center gap-2 overflow-hidden">
             {match.home_team?.flag_code ? <TeamFlag flagCode={match.home_team.flag_code} /> : <div className="w-5 h-4 bg-muted rounded"></div>}
-            <span className="text-xs font-medium truncate">{homeTeamName}</span>
+            <span className="text-xs font-medium truncate">
+              {homeTeamName}
+              {/* Asterisco amarelo se este for o vencedor dos pênaltis */}
+              {pred?.home_score === pred?.away_score && pred?.penalty_winner === 'home' && <span className="text-yellow-500 ml-1 font-black" title="Vence nos Pênaltis">*</span>}
+            </span>
           </div>
           <span className={`text-xs font-bold w-6 text-center rounded ${pred ? 'bg-primary/20 text-primary' : 'bg-muted'}`}>
             {pred ? pred.home_score : '-'}
@@ -241,7 +285,11 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
         <div className="flex items-center justify-between py-1">
           <div className="flex items-center gap-2 overflow-hidden">
             {match.away_team?.flag_code ? <TeamFlag flagCode={match.away_team.flag_code} /> : <div className="w-5 h-4 bg-muted rounded"></div>}
-            <span className="text-xs font-medium truncate">{awayTeamName}</span>
+            <span className="text-xs font-medium truncate">
+              {awayTeamName}
+              {/* Asterisco amarelo se este for o vencedor dos pênaltis */}
+              {pred?.home_score === pred?.away_score && pred?.penalty_winner === 'away' && <span className="text-yellow-500 ml-1 font-black" title="Vence nos Pênaltis">*</span>}
+            </span>
           </div>
           <span className={`text-xs font-bold w-6 text-center rounded ${pred ? 'bg-primary/20 text-primary' : 'bg-muted'}`}>
             {pred ? pred.away_score : '-'}
@@ -295,6 +343,7 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
                 match={selectedMatch.match}
                 initialHome={selectedMatch.pred?.home_score}
                 initialAway={selectedMatch.pred?.away_score}
+                initialPenaltyWinner={selectedMatch.pred?.penalty_winner}
                 predictionId={selectedMatch.pred?.id}
                 onSave={onSave}
                 timeOffset={timeOffset}
@@ -369,10 +418,17 @@ export default function Predictions() {
     }
   }, [allMatches, timeOffset])
 
-  const savePrediction = async (matchId: string, home: number, away: number, predictionId?: string) => {
+  // A função de salvar agora aceita o penaltyWinner
+  const savePrediction = async (matchId: string, home: number, away: number, penaltyWinner: 'home' | 'away' | null, predictionId?: string) => {
     if (!user) return
     try {
-      const payload: any = { user_id: user.id, match_id: matchId, home_score: home, away_score: away }
+      const payload: any = { 
+        user_id: user.id, 
+        match_id: matchId, 
+        home_score: home, 
+        away_score: away,
+        penalty_winner: penaltyWinner
+      }
       if (predictionId) payload.id = predictionId
 
       const { error } = await predictions.upsertPrediction(payload)
@@ -413,6 +469,7 @@ export default function Predictions() {
               <p>Nenhuma partida de grupos pendente</p>
             </Card>
           ) : (
+            // Repassando savePrediction sem alterações visuais aqui (pois é Fase de Grupos)
             availableMatches.map((match) => <PredictionForm key={match.id} match={match} onSave={savePrediction} timeOffset={timeOffset} />)
           )}
         </TabsContent>

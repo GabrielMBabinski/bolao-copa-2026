@@ -109,6 +109,7 @@ export interface Database {
           status?: 'pending' | 'in_progress' | 'finished'
           created_at?: string
           updated_at?: string
+          penalty_winner: 'home' | 'away' | null
         }
       }
       predictions: {
@@ -141,6 +142,7 @@ export interface Database {
           points_earned?: number
           created_at?: string
           updated_at?: string
+          penalty_winner: 'home' | 'away' | null
         }
       }
     }
