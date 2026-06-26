@@ -421,7 +421,7 @@ export default function Predictions() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-3 mb-6 bg-muted/50 p-1">
-          <TabsTrigger value="available">Grupos ({availableMatches.length})</TabsTrigger>
+          <TabsTrigger value="available">Fase de Grupos ({availableMatches.length})</TabsTrigger>
           <TabsTrigger value="my-predictions">Meus Palpites</TabsTrigger>
           <TabsTrigger value="bracket" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold">
             <GitMerge className="w-4 h-4 mr-2" />
