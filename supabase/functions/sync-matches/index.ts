@@ -101,19 +101,39 @@ serve(async (req) => {
         continue
       }
 
+      // ==========================================
+      // LÓGICA DE PÊNALTIS (O Segredo do Mata-Mata)
+      // ==========================================
+      let dbPenaltyWinner = null;
+      if (match.score?.duration === 'PENALTY_SHOOTOUT') {
+        const homePen = match.score?.penalties?.home ?? 0;
+        const awayPen = match.score?.penalties?.away ?? 0;
+        
+        if (homePen > awayPen) {
+          dbPenaltyWinner = 'home';
+        } else if (awayPen > homePen) {
+          dbPenaltyWinner = 'away';
+        }
+      }
+
       const { error: updateError } = await supabase
         .from('matches')
         .update({
           home_score: match.score?.fullTime?.home ?? 0,
           away_score: match.score?.fullTime?.away ?? 0,
           status: dbStatus,
+          penalty_winner: dbPenaltyWinner, // <-- SALVA O VENCEDOR DOS PÊNALTIS
           updated_at: new Date().toISOString(),
         })
         .eq('home_team_id', hId)
         .eq('away_team_id', aId)
+        // BLINDAGEM: Só atualiza o jogo se ele for da rodada atual (evita sobrescrever jogos antigos de times repetidos)
+        .gte('match_date', ontem.toISOString())
+        .lte('match_date', amanha.toISOString())
 
       if (!updateError) {
-        console.log(`Sucesso: ${match.homeTeam.name} ${match.score?.fullTime?.home} - ${match.score?.fullTime?.away} ${match.awayTeam.name}`)
+        let penLog = dbPenaltyWinner ? ` (Pênaltis: Venceu ${dbPenaltyWinner})` : '';
+        console.log(`Sucesso: ${match.homeTeam.name} ${match.score?.fullTime?.home} - ${match.score?.fullTime?.away} ${match.awayTeam.name}${penLog}`)
         updatedCount++
       }
     }
