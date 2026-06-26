@@ -119,7 +119,10 @@ serve(async (req) => {
       const aId = findTeamId(translatedAway, match.awayTeam.name)
 
       // Se a API retornou um jogo com times ainda não decididos (ex: "Winner Group A"), pulamos temporariamente
-      if (!hId || !aId) continue
+      if (!hId || !aId) {
+        console.log(`⚠️ Jogo ignorado (${dbPhase}): ${match.homeTeam?.name} x ${match.awayTeam?.name}. Motivo: Um ou ambos os times não foram encontrados no banco de dados.`);
+        continue;
+      }
 
       // Mapeamento de Status
       let dbStatus = 'pending'
