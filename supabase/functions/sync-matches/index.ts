@@ -53,6 +53,20 @@ const translateApiName = (apiName: string): string => {
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
+  // --- NOVA BLINDAGEM DE SEGURANÇA ---
+  // Pega o token de autorização que vem na requisição
+  const authHeader = req.headers.get('Authorization')
+  const expectedAuthHeader = `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`
+
+  // Se não tiver o Bearer Token do seu projeto, bloqueia o acesso na hora
+  if (authHeader !== expectedAuthHeader) {
+    console.warn('Tentativa de acesso negada à Edge Function.')
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  }
+
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
