@@ -40,7 +40,8 @@ const PHASE_DICTIONARY: Record<string, string> = {
   'FINAL': 'final'
 }
 
-const normalizeName = (name: string) => {
+const normalizeName = (name: string | null | undefined) => {
+  if (!name) return ""
   return name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim()
 }
 
@@ -80,8 +81,11 @@ serve(async (req) => {
     let updateCount = 0
 
     for (const match of apiMatches) {
-      // Liberados status SCHEDULED e TIMED para podermos inserir os jogos do mata-mata antes de começarem!
+      // Liberados status SCHEDULED e TIMED...
       if (!['SCHEDULED', 'TIMED', 'IN_PLAY', 'PAUSED', 'FINISHED'].includes(match.status)) continue
+
+      // 👇 ADICIONE ESTA LINHA AQUI 👇: Pula os jogos onde as seleções ainda não estão definidas
+      if (!match.homeTeam?.name || !match.awayTeam?.name) continue;
 
       const translatedHome = translateApiName(match.homeTeam.name)
       const translatedAway = translateApiName(match.awayTeam.name)
