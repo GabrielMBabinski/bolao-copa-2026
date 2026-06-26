@@ -109,131 +109,98 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', ini
   const [saving, setSaving] = useState(false)
   const [justSaved, setJustSaved] = useState(false)
 
-  // Verificações para a regra do Mata-Mata
   const isKnockout = match.phase !== 'group'
   const isTie = homeScore !== '' && awayScore !== '' && Number(homeScore) === Number(awayScore)
 
+  // Reset do penaltyWinner se o usuário mudar o placar e não for mais empate
+  useEffect(() => {
+    if (!isTie) setPenaltyWinner(null)
+  }, [homeScore, awayScore, isTie])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (homeScore === '' || awayScore === '') return;
-
-    // BLOQUEIO: Se for mata-mata e o palpite for empate, obriga a escolher o vencedor dos pênaltis
     if (isKnockout && isTie && !penaltyWinner) {
       alert("Jogo de mata-mata empatado! Por favor, selecione abaixo quem se classifica nos pênaltis.");
       return;
     }
-
     const now = new Date();
     const matchDate = new Date(match.match_date);
-
     if (now >= matchDate || match.status !== 'pending') {
-      alert("O jogo já começou ou foi encerrado! Não é possível atualizar palpites.");
+      alert("O jogo já começou ou foi encerrado!");
       return;
     }
-
     setSaving(true);
-
     try {
-      // Passamos o penaltyWinner (apenas se for empate, caso contrário passamos null)
       await onSave(match.id, Number(homeScore), Number(awayScore), isTie ? penaltyWinner : null, predictionId);
-
       setJustSaved(true);
       if (onSavedCallback) {
-        setTimeout(() => {
-          setJustSaved(false)
-          onSavedCallback()
-        }, 1000)
+        setTimeout(() => { setJustSaved(false); onSavedCallback() }, 1000)
       } else {
         setTimeout(() => setJustSaved(false), 2000)
       }
-    } catch (err) {
-      console.error("Falha ao salvar:", err);
-    } finally {
-      setSaving(false);
-    }
+    } catch (err) { console.error("Falha ao salvar:", err); } finally { setSaving(false); }
   }
 
   const realCurrentTime = new Date(new Date().getTime() + timeOffset)
   const isLocked = normalizeDate(match.match_date) <= realCurrentTime || match.status !== 'pending'
   const isFinished = match.status === 'finished'
 
-  const homeTeamName = match.home_team?.name || 'A Definir'
-  const awayTeamName = match.away_team?.name || 'A Definir'
-
   return (
-    <div className={`p-4 border rounded-lg flex flex-col gap-4 ${isLocked ? 'opacity-80 bg-muted/10' : 'bg-card shadow-sm hover:shadow-md transition-all'}`}>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3">
-        <Badge variant={isLocked ? "secondary" : "outline"} className="w-fit">{getPhaseLabel(match.phase)}</Badge>
-        <div className="flex items-center gap-1 text-sm text-muted-foreground">
-          {isLocked ? <Lock className="h-4 w-4" /> : <Clock className="h-4 w-4" />}
-          {formatDate(match.match_date)}
-          {isLocked && <span className="ml-1 font-medium text-destructive">(Encerrado)</span>}
-        </div>
+    <div className={`p-4 border rounded-xl flex flex-col gap-6 ${isLocked ? 'opacity-80 bg-muted/10' : 'bg-card shadow-sm'}`}>
+      {/* Cabeçalho */}
+      <div className="flex items-center justify-between border-b pb-3">
+        <Badge variant={isLocked ? "secondary" : "outline"}>{getPhaseLabel(match.phase)}</Badge>
+        <span className="text-xs text-muted-foreground flex items-center gap-1">
+          <Clock className="h-3 w-3" /> {formatDate(match.match_date)}
+        </span>
       </div>
 
-      <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-        <div className="flex items-center justify-center gap-2 sm:gap-4 w-full md:w-auto flex-wrap">
-          <div className="flex flex-col items-center gap-1 min-w-[80px]">
+      {/* Times e Placar */}
+      <div className="flex flex-col items-center gap-4">
+        <div className="flex items-center justify-center gap-6 w-full">
+          <div className="flex flex-col items-center gap-2 flex-1">
             {match.home_team?.flag_code ? <TeamFlag flagCode={match.home_team.flag_code} /> : <div className="w-8 h-6 bg-muted rounded"></div>}
-            <span className="font-medium text-sm text-center">{homeTeamName}</span>
+            <span className="font-bold text-sm text-center truncate w-full">{match.home_team?.name || 'A Definir'}</span>
           </div>
-          <span className="text-muted-foreground text-sm font-bold bg-muted px-2 py-1 rounded-md">X</span>
-          <div className="flex flex-col items-center gap-1 min-w-[80px]">
+          <span className="text-xl font-black text-muted-foreground">X</span>
+          <div className="flex flex-col items-center gap-2 flex-1">
             {match.away_team?.flag_code ? <TeamFlag flagCode={match.away_team.flag_code} /> : <div className="w-8 h-6 bg-muted rounded"></div>}
-            <span className="font-medium text-sm text-center">{awayTeamName}</span>
+            <span className="font-bold text-sm text-center truncate w-full">{match.away_team?.name || 'A Definir'}</span>
           </div>
         </div>
 
+        {/* Formulário Ajustado */}
         {!isLocked && match.home_team && match.away_team ? (
-          <form onSubmit={handleSubmit} className="flex flex-col w-full md:w-auto bg-muted/30 p-3 rounded-lg gap-3">
-            <div className="flex flex-col sm:flex-row items-center gap-3">
-              <div className="flex items-center gap-2">
-                <Input type="number" min="0" max="20" required value={homeScore} onChange={(e) => setHomeScore(e.target.value === '' ? '' : parseInt(e.target.value))} className="w-16 h-10 text-center font-bold text-lg" placeholder="0" />
-                <span className="text-muted-foreground font-bold">-</span>
-                <Input type="number" min="0" max="20" required value={awayScore} onChange={(e) => setAwayScore(e.target.value === '' ? '' : parseInt(e.target.value))} className="w-16 h-10 text-center font-bold text-lg" placeholder="0" />
-              </div>
-
-              <Button
-                type="submit"
-                disabled={saving || justSaved}
-                className={`w-full sm:w-auto transition-colors duration-300 ${justSaved ? 'bg-green-600 hover:bg-green-700 text-white' : ''}`}
-              >
-                {saving ? 'Salvando...' : justSaved ? 'Salvo! ✅' : predictionId ? 'Atualizar' : 'Salvar'}
-              </Button>
+          <form onSubmit={handleSubmit} className="w-full max-w-xs flex flex-col gap-4">
+            <div className="flex items-center justify-center gap-3">
+              <Input type="number" min="0" max="20" required value={homeScore} onChange={(e) => setHomeScore(e.target.value === '' ? '' : parseInt(e.target.value))} className="w-20 h-14 text-center font-black text-2xl" placeholder="0" />
+              <span className="text-xl font-black text-muted-foreground">-</span>
+              <Input type="number" min="0" max="20" required value={awayScore} onChange={(e) => setAwayScore(e.target.value === '' ? '' : parseInt(e.target.value))} className="w-20 h-14 text-center font-black text-2xl" placeholder="0" />
             </div>
 
-            {/* SELETOR DE PÊNALTIS (Aparece dinamicamente com animação) */}
+            {/* Penalties abaixo do placar */}
             {isKnockout && isTie && (
-              <div className="w-full bg-yellow-500/10 border border-yellow-500/20 p-3 rounded-xl text-center space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
-                <p className="text-xs font-bold text-yellow-600 uppercase tracking-wider">
-                  Empate! Quem passa nos pênaltis?
-                </p>
-                <div className="flex justify-center gap-2 sm:gap-4">
-                  <Button
-                    type="button"
-                    variant={penaltyWinner === 'home' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setPenaltyWinner('home')}
-                    className="text-xs font-bold w-full sm:w-auto"
-                  >
-                    {homeTeamName}
+              <div className="bg-yellow-500/10 border border-yellow-500/20 p-3 rounded-lg text-center space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                <p className="text-[11px] font-bold text-yellow-600 uppercase">Classificado nos pênaltis:</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button type="button" variant={penaltyWinner === 'home' ? 'default' : 'outline'} size="sm" onClick={() => setPenaltyWinner('home')} className="text-xs h-8">
+                    {match.home_team?.name}
                   </Button>
-                  <Button
-                    type="button"
-                    variant={penaltyWinner === 'away' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setPenaltyWinner('away')}
-                    className="text-xs font-bold w-full sm:w-auto"
-                  >
-                    {awayTeamName}
+                  <Button type="button" variant={penaltyWinner === 'away' ? 'default' : 'outline'} size="sm" onClick={() => setPenaltyWinner('away')} className="text-xs h-8">
+                    {match.away_team?.name}
                   </Button>
                 </div>
               </div>
             )}
+
+            {/* Botão de salvar no final */}
+            <Button type="submit" disabled={saving || justSaved} className={`w-full h-12 text-base font-bold ${justSaved ? 'bg-green-600 hover:bg-green-700' : ''}`}>
+              {saving ? 'Salvando...' : justSaved ? 'Salvo! ✅' : predictionId ? 'Atualizar Palpite' : 'Confirmar Palpite'}
+            </Button>
           </form>
         ) : !isLocked && (!match.home_team || !match.away_team) ? (
-          <Badge variant="outline" className="text-muted-foreground">Aguardando Seleções</Badge>
+          <Badge variant="outline">Aguardando Seleções</Badge>
         ) : null}
       </div>
 
