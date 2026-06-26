@@ -8,14 +8,13 @@ const corsHeaders = {
 
 // --- DICIONÁRIO DE TRADUÇÃO (Inglês API -> Português Banco) ---
 const TEAM_DICTIONARY: Record<string, string> = {
-  'netherlands': 'holanda',
-  'curaçao': 'curacao',
-  'curacao': 'curacao',
-  'cape verde islands': 'cabo verde',
+  'netherlands': 'holanda', 'holland': 'holanda',
+  'curaçao': 'curacao', 'curacao': 'curacao',
+  'cape verde islands': 'cabo verde', 'cape verde': 'cabo verde', 'cabo verde': 'cabo verde',
   'republic of ireland': 'irlanda',
   'canada': 'canada', 'mexico': 'mexico', 'united states': 'estados unidos', 'usa': 'estados unidos',
   'panama': 'panama', 'haiti': 'haiti', 'egypt': 'egito', 'senegal': 'senegal',
-  'south africa': 'africa do sul', 'cape verde': 'cabo verde', 'cabo verde': 'cabo verde', 'morocco': 'marrocos',
+  'south africa': 'africa do sul', 'morocco': 'marrocos',
   'ivory coast': 'costa do marfim', "cote d'ivoire": 'costa do marfim', 'algeria': 'argelia', 'tunisia': 'tunisia',
   'ghana': 'gana', 'dr congo': 'rd congo', 'congo dr': 'rd congo', 'argentina': 'argentina', 
   'ecuador': 'equador', 'colombia': 'colombia', 'uruguay': 'uruguai', 'brazil': 'brasil',
@@ -23,14 +22,22 @@ const TEAM_DICTIONARY: Record<string, string> = {
   'japan': 'japao', 'uzbekistan': 'uzbequistao', 'jordan': 'jordania', 'australia': 'australia', 'qatar': 'catar',
   'saudi arabia': 'arabia saudita', 'iraq': 'iraque', 'new zealand': 'nova zelandia', 'germany': 'alemanha',
   'switzerland': 'suica', 'scotland': 'escocia', 'france': 'franca', 'spain': 'espanha', 'portugal': 'portugal',
-  'holland': 'paises baixos', 'austria': 'austria', 'norway': 'noruega',
-  'belgium': 'belgica', 'england': 'inglaterra', 'croatia': 'croacia', 'turkey': 'turquia', 'turkiye': 'turquia',
-  'czech republic': 'republica tcheca', 'czechia': 'republica tcheca', 'sweden': 'suecia',
-  'bosnia and herzegovina': 'bosnia e herzegovina',
-  'bosnia-herzegovina': 'bosnia e herzegovina',
-  'bosnia & herzegovina': 'bosnia e herzegovina',
-  'bosnia': 'bosnia e herzegovina',
-  'bih': 'bosnia e herzegovina'
+  'austria': 'austria', 'norway': 'noruega', 'belgium': 'belgica', 'england': 'inglaterra', 'croatia': 'croacia', 
+  'turkey': 'turquia', 'turkiye': 'turquia', 'czech republic': 'republica tcheca', 'czechia': 'republica tcheca', 
+  'sweden': 'suecia', 'bosnia and herzegovina': 'bosnia e herzegovina', 'bosnia-herzegovina': 'bosnia e herzegovina',
+  'bosnia & herzegovina': 'bosnia e herzegovina', 'bosnia': 'bosnia e herzegovina', 'bih': 'bosnia e herzegovina'
+}
+
+// --- DICIONÁRIO DE FASES (API -> Banco de Dados) ---
+const PHASE_DICTIONARY: Record<string, string> = {
+  'GROUP_STAGE': 'group',
+  'LAST_32': 'round_32',
+  'ROUND_OF_32': 'round_32',
+  'LAST_16': 'round_16',
+  'ROUND_OF_16': 'round_16',
+  'QUARTER_FINALS': 'quarter',
+  'SEMI_FINALS': 'semi',
+  'FINAL': 'final'
 }
 
 const normalizeName = (name: string) => {
@@ -54,97 +61,135 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    const hoje = new Date()
-    const ontem = new Date(hoje); ontem.setDate(ontem.getDate() - 1)
-    const amanha = new Date(hoje); amanha.setDate(amanha.getDate() + 1)
-    
-    const dateFrom = ontem.toISOString().split('T')[0]
-    const dateTo = amanha.toISOString().split('T')[0]
-    const apiUrl = `https://api.football-data.org/v4/competitions/2000/matches?dateFrom=${dateFrom}&dateTo=${dateTo}`
+    // Buscamos todas as partidas da competição sem travas apertadas de data para achar o mata-mata futuro
+    const apiUrl = `https://api.football-data.org/v4/competitions/2000/matches`
 
     const response = await fetch(apiUrl, { headers: { 'X-Auth-Token': footballDataToken } })
-    if (!response.ok) throw new Error('Falha ao buscar dados na API')
+    if (!response.ok) throw new Error('Falha ao buscar dados na API externa')
 
     const data = await response.json()
-    const matches = data.matches || []
+    const apiMatches = data.matches || []
 
-    const { data: teams } = await supabase.from('teams').select('id, name, flag_code')
-    if (!teams) throw new Error('Nenhum time encontrado no banco.')
+    // Carrega dados atuais do banco para comparação e relacionamento
+    const { data: dbTeams } = await supabase.from('teams').select('id, name, flag_code')
+    const { data: dbMatches } = await supabase.from('matches').select('*')
 
-    let updatedCount = 0
+    if (!dbTeams || !dbMatches) throw new Error('Erro ao carregar dados bases do Supabase.')
 
-    for (const match of matches) {
-      if (!['IN_PLAY', 'PAUSED', 'FINISHED'].includes(match.status)) continue
+    let insertCount = 0
+    let updateCount = 0
 
-      const dbStatus = match.status === 'FINISHED' ? 'finished' : 'in_progress'
-      
-      // Traduz os nomes que vêm da API para o nosso padrão em Português
+    for (const match of apiMatches) {
+      // Liberados status SCHEDULED e TIMED para podermos inserir os jogos do mata-mata antes de começarem!
+      if (!['SCHEDULED', 'TIMED', 'IN_PLAY', 'PAUSED', 'FINISHED'].includes(match.status)) continue
+
       const translatedHome = translateApiName(match.homeTeam.name)
       const translatedAway = translateApiName(match.awayTeam.name)
 
-      // Busca o ID comparando o nome traduzido com o nome normalizado (sem acentos) do banco
+      // Resolve os IDs dos times baseados nos nomes traduzidos ou códigos de bandeira
       const findTeamId = (translatedName: string, originalApiName: string) => {
-        return teams.find(t => {
+        return dbTeams.find(t => {
           const dbName = normalizeName(t.name)
           return dbName === translatedName || 
                  dbName.includes(translatedName) || 
                  translatedName.includes(dbName) ||
                  (t.flag_code && originalApiName.toLowerCase().includes(t.flag_code.toLowerCase()))
-        })?.id;
-      };
+        })?.id
+      }
 
       const hId = findTeamId(translatedHome, match.homeTeam.name)
       const aId = findTeamId(translatedAway, match.awayTeam.name)
 
-      if (!hId || !aId) {
-        console.warn(`Times não mapeados: API(${match.homeTeam.name} vs ${match.awayTeam.name}) -> Tentativa(${translatedHome} vs ${translatedAway})`)
-        continue
-      }
+      // Se a API retornou um jogo com times ainda não decididos (ex: "Winner Group A"), pulamos temporariamente
+      if (!hId || !aId) continue
 
-      // ==========================================
-      // LÓGICA DE PÊNALTIS (O Segredo do Mata-Mata)
-      // ==========================================
-      let dbPenaltyWinner = null;
+      // Mapeamento de Status
+      let dbStatus = 'pending'
+      if (match.status === 'FINISHED') dbStatus = 'finished'
+      else if (['IN_PLAY', 'PAUSED', 'LIVE'].includes(match.status)) dbStatus = 'in_progress'
+
+      // Mapeamento de Fase (Phase)
+      const dbPhase = PHASE_DICTIONARY[match.stage] || 'group'
+
+      // Coleta de Placar (Gols)
+      const homeScore = match.score?.fullTime?.home ?? null
+      const awayScore = match.score?.fullTime?.away ?? null
+
+      // Verificação de vencedor nos pênaltis
+      let dbPenaltyWinner = null
       if (match.score?.duration === 'PENALTY_SHOOTOUT') {
-        const homePen = match.score?.penalties?.home ?? 0;
-        const awayPen = match.score?.penalties?.away ?? 0;
-        
-        if (homePen > awayPen) {
-          dbPenaltyWinner = 'home';
-        } else if (awayPen > homePen) {
-          dbPenaltyWinner = 'away';
-        }
+        const homePen = match.score?.penalties?.home ?? 0
+        const awayPen = match.score?.penalties?.away ?? 0
+        if (homePen > awayPen) dbPenaltyWinner = 'home'
+        else if (awayPen > homePen) dbPenaltyWinner = 'away'
       }
 
-      const { error: updateError } = await supabase
-        .from('matches')
-        .update({
-          home_score: match.score?.fullTime?.home ?? 0,
-          away_score: match.score?.fullTime?.away ?? 0,
-          status: dbStatus,
-          penalty_winner: dbPenaltyWinner, // <-- SALVA O VENCEDOR DOS PÊNALTIS
-          updated_at: new Date().toISOString(),
-        })
-        .eq('home_team_id', hId)
-        .eq('away_team_id', aId)
-        // BLINDAGEM: Só atualiza o jogo se ele for da rodada atual (evita sobrescrever jogos antigos de times repetidos)
-        .gte('match_date', ontem.toISOString())
-        .lte('match_date', amanha.toISOString())
+      // Procura se o jogo já existe no nosso banco (pelo api_id ou pela combinação de times + fase)
+      const existingMatch = dbMatches.find(m => 
+        m.api_id === match.id || 
+        (m.home_team_id === hId && m.away_team_id === aId && m.phase === dbPhase)
+      )
 
-      if (!updateError) {
-        let penLog = dbPenaltyWinner ? ` (Pênaltis: Venceu ${dbPenaltyWinner})` : '';
-        console.log(`Sucesso: ${match.homeTeam.name} ${match.score?.fullTime?.home} - ${match.score?.fullTime?.away} ${match.awayTeam.name}${penLog}`)
-        updatedCount++
+      if (existingMatch) {
+        // --- LOGICA DE UPDATE ---
+        const needsUpdate = 
+          existingMatch.home_score !== homeScore ||
+          existingMatch.away_score !== awayScore ||
+          existingMatch.status !== dbStatus ||
+          existingMatch.penalty_winner !== dbPenaltyWinner ||
+          existingMatch.api_id !== match.id
+
+        if (needsUpdate) {
+          const { error: updateError } = await supabase
+            .from('matches')
+            .update({
+              api_id: match.id,
+              home_score: homeScore,
+              away_score: awayScore,
+              status: dbStatus,
+              penalty_winner: dbPenaltyWinner,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existingMatch.id)
+
+          if (!updateError) updateCount++
+        }
+      } else {
+        // --- LOGICA DE INSERT AUTOMÁTICO (Nova partida encontrada) ---
+        const { error: insertError } = await supabase
+          .from('matches')
+          .insert({
+            api_id: match.id,
+            home_team_id: hId,
+            away_team_id: aId,
+            match_date: match.utcDate,
+            phase: dbPhase,
+            home_score: homeScore,
+            away_score: awayScore,
+            status: dbStatus,
+            penalty_winner: dbPenaltyWinner
+          })
+
+        if (!insertError) {
+          console.log(`✨ NOVO CONFRONTO INSERIDO: ${match.homeTeam.name} x ${match.awayTeam.name} (${dbPhase})`)
+          insertCount++
+        } else {
+          console.error(`❌ Erro ao inserir jogo ${match.id}:`, insertError.message)
+        }
       }
     }
 
     return new Response(
-      JSON.stringify({ message: 'Sync completo', updatedMatches: updatedCount }),
+      JSON.stringify({ 
+        message: 'Sincronização executada com sucesso', 
+        jogos_inseridos: insertCount, 
+        jogos_atualizados: updateCount 
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 
   } catch (error: any) {
-    console.error('Erro na Edge Function:', error)
+    console.error('Erro na execução da Edge Function:', error)
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
