@@ -59,7 +59,6 @@ serve(async (req) => {
   const expectedAnon = `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`
   const expectedService = `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
 
-  // Se não tiver nenhuma das duas chaves, bloqueia
   if (authHeader !== expectedAnon && authHeader !== expectedService) {
     console.warn('Tentativa de acesso negada à Edge Function.')
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -76,17 +75,40 @@ serve(async (req) => {
     if (!footballDataToken) throw new Error('FOOTBALL_DATA_TOKEN não configurado')
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
-    // Buscamos todas as partidas da competição sem travas apertadas de data para achar o mata-mata futuro
     const apiUrl = `https://api.football-data.org/v4/competitions/2000/matches`
 
-    const response = await fetch(apiUrl, { headers: { 'X-Auth-Token': footballDataToken } })
-    if (!response.ok) throw new Error('Falha ao buscar dados na API externa')
+    // --- SISTEMA DE RESILIÊNCIA (RETRY & TIMEOUT) ---
+    let apiResponse;
+    let apiData;
+    let retries = 3;
 
-    const data = await response.json()
-    const apiMatches = data.matches || []
+    while (retries > 0) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 segundos de timeout limite
 
-    // Carrega dados atuais do banco para comparação e relacionamento
+        apiResponse = await fetch(apiUrl, { 
+          headers: { 'X-Auth-Token': footballDataToken },
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+
+        if (!apiResponse.ok) throw new Error(`HTTP Error: ${apiResponse.status}`);
+        
+        apiData = await apiResponse.json();
+        break; // Sucesso, sai do loop de tentativas
+      } catch (e: any) {
+        retries--;
+        console.error(`Falha de conexão com a API. Tentativas restantes: ${retries}. Erro: ${e.message}`);
+        if (retries === 0) throw new Error('Falha ao buscar dados na API externa após 3 tentativas.');
+        await new Promise(res => setTimeout(res, 2000)); // Espera 2 segundos antes de tentar de novo
+      }
+    }
+
+    const apiMatches = apiData.matches || []
+
+    // Carrega dados atuais do banco
     const { data: dbTeams } = await supabase.from('teams').select('id, name, flag_code')
     const { data: dbMatches } = await supabase.from('matches').select('*')
 
@@ -96,20 +118,14 @@ serve(async (req) => {
     let updateCount = 0
 
     for (const match of apiMatches) {
-
-      {/*if (match.stage !== 'GROUP_STAGE') {
-        console.log(`🔎 Jogo API | Fase: ${match.stage} | Status: ${match.status} | Times: ${match.homeTeam?.name} x ${match.awayTeam?.name}`);
-      }*/}
-      // Liberados status SCHEDULED e TIMED...
       if (!['SCHEDULED', 'TIMED', 'IN_PLAY', 'PAUSED', 'FINISHED'].includes(match.status)) continue
 
-      // 👇 ADICIONE ESTA LINHA AQUI 👇: Pula os jogos onde as seleções ainda não estão definidas
+      // Pula os jogos onde as seleções ainda não estão definidas ("Winner Group A", etc.)
       if (!match.homeTeam?.name || !match.awayTeam?.name) continue;
 
       const translatedHome = translateApiName(match.homeTeam.name)
       const translatedAway = translateApiName(match.awayTeam.name)
 
-      // Resolve os IDs dos times baseados nos nomes traduzidos ou códigos de bandeira
       const findTeamId = (translatedName: string, originalApiName: string) => {
         return dbTeams.find(t => {
           const dbName = normalizeName(t.name)
@@ -123,25 +139,20 @@ serve(async (req) => {
       const hId = findTeamId(translatedHome, match.homeTeam.name)
       const aId = findTeamId(translatedAway, match.awayTeam.name)
 
-      // Se a API retornou um jogo com times ainda não decididos (ex: "Winner Group A"), pulamos temporariamente
       if (!hId || !aId) {
-        console.log(`⚠️ Jogo ignorado (${dbPhase}): ${match.homeTeam?.name} x ${match.awayTeam?.name}. Motivo: Um ou ambos os times não foram encontrados no banco de dados.`);
+        console.log(`⚠️ Jogo ignorado: ${match.homeTeam?.name} x ${match.awayTeam?.name}. Motivo: Times não encontrados.`);
         continue;
       }
 
-      // Mapeamento de Status
       let dbStatus = 'pending'
       if (match.status === 'FINISHED') dbStatus = 'finished'
       else if (['IN_PLAY', 'PAUSED', 'LIVE'].includes(match.status)) dbStatus = 'in_progress'
 
-      // Mapeamento de Fase (Phase)
       const dbPhase = PHASE_DICTIONARY[match.stage] || 'group'
 
-      // Coleta de Placar (Gols)
       const homeScore = match.score?.fullTime?.home ?? null
       const awayScore = match.score?.fullTime?.away ?? null
 
-      // Verificação de vencedor nos pênaltis
       let dbPenaltyWinner = null
       if (match.score?.duration === 'PENALTY_SHOOTOUT') {
         const homePen = match.score?.penalties?.home ?? 0
@@ -150,15 +161,15 @@ serve(async (req) => {
         else if (awayPen > homePen) dbPenaltyWinner = 'away'
       }
 
-      // Procura se o jogo já existe no nosso banco (pelo api_id ou pela combinação de times + fase)
+      // Identifica se o jogo já existe no banco de dados
       const existingMatch = dbMatches.find(m => 
         m.api_id === match.id || 
         (m.home_team_id === hId && m.away_team_id === aId && m.phase === dbPhase)
       )
 
-      // --- LIMPEZA PREVENTIVA ---
-      // Mesmo que o jogo exista ou não, garantimos que não haja "fantasmas" no banco
-      // com os mesmos times e fase, exceto o jogo que estamos processando agora.
+      // --- LIMPEZA PREVENTIVA UNIFICADA ---
+      // Apaga qualquer duplicata que compartilhe os mesmos times e fase, 
+      // poupando apenas o ID oficial que já vamos atualizar.
       await supabase
         .from('matches')
         .delete()
@@ -168,28 +179,21 @@ serve(async (req) => {
         .neq('id', existingMatch?.id || '00000000-0000-0000-0000-000000000000');
 
       if (existingMatch) {
-        // --- LIMPEZA PREVENTIVA: Remove qualquer jogo duplicado com mesmos times/fase ---
-        await supabase
-          .from('matches')
-          .delete()
-          .eq('home_team_id', hId)
-          .eq('away_team_id', aId)
-          .eq('phase', dbPhase)
-          .neq('id', existingMatch.id); // Mantém apenas o existingMatch encontrado
-
         // --- LOGICA DE UPDATE ---
         const needsUpdate = 
           existingMatch.home_score !== homeScore ||
           existingMatch.away_score !== awayScore ||
           existingMatch.status !== dbStatus ||
           existingMatch.penalty_winner !== dbPenaltyWinner ||
-          existingMatch.api_id !== match.id
+          existingMatch.api_id !== match.id ||
+          existingMatch.match_date !== match.utcDate // Atualiza caso a FIFA mude a data
 
         if (needsUpdate) {
           const { error: updateError } = await supabase
             .from('matches')
             .update({
               api_id: match.id,
+              match_date: match.utcDate,
               home_score: homeScore,
               away_score: awayScore,
               status: dbStatus,
@@ -202,8 +206,6 @@ serve(async (req) => {
         }
       } else {
         // --- LOGICA DE INSERT AUTOMÁTICO ---
-        // (Opcional: Pode adicionar a limpeza preventiva aqui também se quiser segurança máxima)
-        
         const { error: insertError } = await supabase
           .from('matches')
           .insert({
