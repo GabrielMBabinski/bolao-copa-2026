@@ -95,6 +95,10 @@ serve(async (req) => {
     let updateCount = 0
 
     for (const match of apiMatches) {
+
+      {/*if (match.stage !== 'GROUP_STAGE') {
+        console.log(`🔎 Jogo API | Fase: ${match.stage} | Status: ${match.status} | Times: ${match.homeTeam?.name} x ${match.awayTeam?.name}`);
+      }*/}
       // Liberados status SCHEDULED e TIMED...
       if (!['SCHEDULED', 'TIMED', 'IN_PLAY', 'PAUSED', 'FINISHED'].includes(match.status)) continue
 
