@@ -192,7 +192,7 @@ serve(async (req) => {
           })
 
         if (!insertError) {
-          console.log(`✨ NOVO CONFRONTO INSERIDO: ${match.homeTeam.name} x ${match.awayTeam.name} (${dbPhase})`)
+          console.log(`✅ NOVO CONFRONTO INSERIDO: ${match.homeTeam.name} x ${match.awayTeam.name} (${dbPhase})`)
           insertCount++
         } else {
           console.error(`❌ Erro ao inserir jogo ${match.id}:`, insertError.message)
