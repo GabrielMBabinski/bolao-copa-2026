@@ -168,8 +168,17 @@ serve(async (req) => {
         .neq('id', existingMatch?.id || '00000000-0000-0000-0000-000000000000');
 
       if (existingMatch) {
+        // --- LIMPEZA PREVENTIVA: Remove qualquer jogo duplicado com mesmos times/fase ---
+        await supabase
+          .from('matches')
+          .delete()
+          .eq('home_team_id', hId)
+          .eq('away_team_id', aId)
+          .eq('phase', dbPhase)
+          .neq('id', existingMatch.id); // Mantém apenas o existingMatch encontrado
+
         // --- LOGICA DE UPDATE ---
-        const needsUpdate =
+        const needsUpdate = 
           existingMatch.home_score !== homeScore ||
           existingMatch.away_score !== awayScore ||
           existingMatch.status !== dbStatus ||
@@ -192,7 +201,9 @@ serve(async (req) => {
           if (!updateError) updateCount++
         }
       } else {
-        // --- LOGICA DE INSERT AUTOMÁTICO (Nova partida encontrada) ---
+        // --- LOGICA DE INSERT AUTOMÁTICO ---
+        // (Opcional: Pode adicionar a limpeza preventiva aqui também se quiser segurança máxima)
+        
         const { error: insertError } = await supabase
           .from('matches')
           .insert({
@@ -217,10 +228,10 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({
-        message: 'Sincronização executada com sucesso',
-        jogos_inseridos: insertCount,
-        jogos_atualizados: updateCount
+      JSON.stringify({ 
+        message: 'Sincronização executada com sucesso', 
+        jogos_inseridos: insertCount, 
+        jogos_atualizados: updateCount 
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
