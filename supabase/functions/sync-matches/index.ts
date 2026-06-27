@@ -16,14 +16,14 @@ const TEAM_DICTIONARY: Record<string, string> = {
   'panama': 'panama', 'haiti': 'haiti', 'egypt': 'egito', 'senegal': 'senegal',
   'south africa': 'africa do sul', 'morocco': 'marrocos',
   'ivory coast': 'costa do marfim', "cote d'ivoire": 'costa do marfim', 'algeria': 'argelia', 'tunisia': 'tunisia',
-  'ghana': 'gana', 'dr congo': 'rd congo', 'congo dr': 'rd congo', 'argentina': 'argentina', 
+  'ghana': 'gana', 'dr congo': 'rd congo', 'congo dr': 'rd congo', 'argentina': 'argentina',
   'ecuador': 'equador', 'colombia': 'colombia', 'uruguay': 'uruguai', 'brazil': 'brasil',
   'paraguay': 'paraguai', 'iran': 'ira', 'ir iran': 'ira', 'south korea': 'coreia do sul', 'korea republic': 'coreia do sul',
   'japan': 'japao', 'uzbekistan': 'uzbequistao', 'jordan': 'jordania', 'australia': 'australia', 'qatar': 'catar',
   'saudi arabia': 'arabia saudita', 'iraq': 'iraque', 'new zealand': 'nova zelandia', 'germany': 'alemanha',
   'switzerland': 'suica', 'scotland': 'escocia', 'france': 'franca', 'spain': 'espanha', 'portugal': 'portugal',
-  'austria': 'austria', 'norway': 'noruega', 'belgium': 'belgica', 'england': 'inglaterra', 'croatia': 'croacia', 
-  'turkey': 'turquia', 'turkiye': 'turquia', 'czech republic': 'republica tcheca', 'czechia': 'republica tcheca', 
+  'austria': 'austria', 'norway': 'noruega', 'belgium': 'belgica', 'england': 'inglaterra', 'croatia': 'croacia',
+  'turkey': 'turquia', 'turkiye': 'turquia', 'czech republic': 'republica tcheca', 'czechia': 'republica tcheca',
   'sweden': 'suecia', 'bosnia and herzegovina': 'bosnia e herzegovina', 'bosnia-herzegovina': 'bosnia e herzegovina',
   'bosnia & herzegovina': 'bosnia e herzegovina', 'bosnia': 'bosnia e herzegovina', 'bih': 'bosnia e herzegovina'
 }
@@ -37,7 +37,8 @@ const PHASE_DICTIONARY: Record<string, string> = {
   'ROUND_OF_16': 'round_16',
   'QUARTER_FINALS': 'quarter',
   'SEMI_FINALS': 'semi',
-  'FINAL': 'final'
+  'FINAL': 'final',
+  'THIRD_PLACE': 'third_place'
 }
 
 const normalizeName = (name: string | null | undefined) => {
@@ -112,10 +113,10 @@ serve(async (req) => {
       const findTeamId = (translatedName: string, originalApiName: string) => {
         return dbTeams.find(t => {
           const dbName = normalizeName(t.name)
-          return dbName === translatedName || 
-                 dbName.includes(translatedName) || 
-                 translatedName.includes(dbName) ||
-                 (t.flag_code && originalApiName.toLowerCase().includes(t.flag_code.toLowerCase()))
+          return dbName === translatedName ||
+            dbName.includes(translatedName) ||
+            translatedName.includes(dbName) ||
+            (t.flag_code && originalApiName.toLowerCase().includes(t.flag_code.toLowerCase()))
         })?.id
       }
 
@@ -155,9 +156,20 @@ serve(async (req) => {
         (m.home_team_id === hId && m.away_team_id === aId && m.phase === dbPhase)
       )
 
+      // --- LIMPEZA PREVENTIVA ---
+      // Mesmo que o jogo exista ou não, garantimos que não haja "fantasmas" no banco
+      // com os mesmos times e fase, exceto o jogo que estamos processando agora.
+      await supabase
+        .from('matches')
+        .delete()
+        .eq('home_team_id', hId)
+        .eq('away_team_id', aId)
+        .eq('phase', dbPhase)
+        .neq('id', existingMatch?.id || '00000000-0000-0000-0000-000000000000');
+
       if (existingMatch) {
         // --- LOGICA DE UPDATE ---
-        const needsUpdate = 
+        const needsUpdate =
           existingMatch.home_score !== homeScore ||
           existingMatch.away_score !== awayScore ||
           existingMatch.status !== dbStatus ||
@@ -205,10 +217,10 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ 
-        message: 'Sincronização executada com sucesso', 
-        jogos_inseridos: insertCount, 
-        jogos_atualizados: updateCount 
+      JSON.stringify({
+        message: 'Sincronização executada com sucesso',
+        jogos_inseridos: insertCount,
+        jogos_atualizados: updateCount
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )

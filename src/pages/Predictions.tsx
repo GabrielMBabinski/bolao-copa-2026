@@ -11,15 +11,21 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Target, Clock, Lock, Check, Users, X, GitMerge } from 'lucide-react'
 import TeamFlag from '@/components/TeamFlag'
 
-// --- FUNÇÕES AUXILIARES ---
-const normalizeDate = (dateString: string) => {
+// --- FUNÇÕES AUXILIARES (BLINDADAS CONTRA NULL) ---
+const normalizeDate = (dateString: string | null) => {
+  // Se o jogo não tiver data definida na API, jogamos para o futuro para não quebrar a tela
+  if (!dateString) return new Date('2099-12-31T00:00:00Z') 
+  
   const formattedString = dateString.replace(' ', 'T')
   const hasTimezone = formattedString.includes('Z') || formattedString.match(/[+-]\d{2}:\d{2}$/)
   const safeDateStr = hasTimezone ? formattedString : `${formattedString}-04:00`
   return new Date(safeDateStr)
 }
 
-const formatDate = (dateString: string) => {
+const formatDate = (dateString: string | null) => {
+  // Se não tiver data, exibe um texto amigável
+  if (!dateString) return 'A definir'
+  
   return normalizeDate(dateString).toLocaleDateString('pt-BR', {
     day: '2-digit', month: '2-digit', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
@@ -29,7 +35,7 @@ const formatDate = (dateString: string) => {
 const getPhaseLabel = (phase: string) => {
   const labels: Record<string, string> = {
     group: 'Fase de Grupos', round_32: 'Dezesseis-avos', round_16: 'Oitavas',
-    quarter: 'Quartas', semi: 'Semifinal', final: 'Final',
+    quarter: 'Quartas', semi: 'Semifinal', final: 'Final', third_place: '3º Lugar'
   }
   return labels[phase] || phase
 }
@@ -209,16 +215,109 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', ini
   )
 }
 
-// --- COMPONENTE: ÁRVORE DO MATA-MATA ---
+// --- COMPONENTE: ÁRVORE DO MATA-MATA (ESTILO FIFA) ---
+// --- COMPONENTE: ÁRVORE DO MATA-MATA (ESTILO FIFA) ---
 const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { allMatches: MatchWithTeams[], userPredictions: PredictionWithMatch[], onSave: any, timeOffset: number }) => {
   const [selectedMatch, setSelectedMatch] = useState<{ match: MatchWithTeams, pred: any } | null>(null)
 
-  const phases = ['round_32', 'round_16', 'quarter', 'semi', 'final']
+  // 1. O ROTEADOR DE CHAVES (O Cérebro da separação)
+  // Baseado na chave da FIFA, estas são as seleções do lado ESQUERDO.
+  // Nota: Faltam 4 seleções que a API ainda vai definir (Ex: 2K, 2L). 
+  // Quando elas aparecerem, basta adicionar o nome delas em minúsculo nesta lista!
+  const LEFT_BRACKET_TEAMS = [
+    'alemanha', 'paraguai', 'franca', 'suecia',
+    'africa do sul', 'canada', 'holanda', 'marrocos',
+    'espanha', 'estados unidos', 'bosnia e herzegovina', 'belgica'
+  ]
+
+  const normalizeName = (name?: string) => {
+    if (!name) return ""
+    return name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim()
+  }
+
+  // 1. O ROTEADOR AUTOMÁTICO (Baseado no Calendário Oficial da FIFA)
+  const getBracketSide = (match: MatchWithTeams) => {
+    // Finais sempre no centro
+    if (match.phase === 'final' || match.phase === 'third_place') return 'center';
+    
+    // Se a API mandar um jogo sem data definida ainda, jogamos para a direita por segurança
+    if (!match.match_date) return 'right';
+
+    // Pegamos a data formatada exatamente como aparece na sua tela (ex: "29/06/2026, 16:30")
+    const dateStr = formatDate(match.match_date);
+
+    // Tabela fixa de (Dia e Hora) dos jogos que pertencem exclusivamente à CHAVE ESQUERDA
+    const leftBracketSchedule = [
+      "28/06/2026", // O único jogo do dia 28 é na esquerda (J73)
+      "29/06/2026|16:30", // J74
+      "29/06/2026|21:00", // J75
+      "30/06/2026|17:00", // J77
+      "01/07/2026|16:00", // J82
+      "01/07/2026|20:00", // J81
+      "02/07/2026|15:00", // J84
+      "02/07/2026|19:00", // J83
+      "04/07/2026|13:00", // J90
+      "04/07/2026|17:00", // J89
+      "06/07/2026|15:00", // J93
+      "06/07/2026|20:00", // J94
+      "09/07/2026|16:00", // J97
+      "10/07/2026|15:00", // J98
+      "14/07/2026|15:00"  // J101 (Semifinal 1)
+    ];
+
+    // Verifica se a data/hora do jogo atual bate com a tabela da esquerda
+    for (const schedule of leftBracketSchedule) {
+      const [day, time] = schedule.split("|");
+      if (time) {
+        if (dateStr.includes(day) && dateStr.includes(time)) return 'left';
+      } else {
+        if (dateStr.includes(day)) return 'left';
+      }
+    }
+
+    // Se o dia/horário não estiver na lista da esquerda, ele obrigatoriamente é da Direita
+    return 'right';
+  }
+
+  const getPhaseMatches = (phase: string) => {
+  const matches = allMatches.filter(m => m.phase === phase);
+  
+  // Criamos um mapa para garantir que, se houver dois jogos entre os mesmos times, 
+  // só o primeiro prevaleça
+  const uniqueMatches = new Map();
+  
+  matches.forEach(m => {
+    // Cria uma chave única baseada nos IDs dos times
+    const key = [m.home_team_id, m.away_team_id].sort().join('-');
+    if (!uniqueMatches.has(key)) {
+      uniqueMatches.set(key, m);
+    }
+  });
+
+  return Array.from(uniqueMatches.values())
+    .sort((a, b) => new Date(a.match_date).getTime() - new Date(b.match_date).getTime());
+};
+
+  // 2. Agora nós dividimos usando o nosso roteador em vez de cortar no meio!
+  const splitMatches = (matches: MatchWithTeams[]) => {
+    return {
+      left: matches.filter(m => getBracketSide(m) === 'left'),
+      right: matches.filter(m => getBracketSide(m) === 'right')
+    }
+  }
+
+  const r32 = splitMatches(getPhaseMatches('round_32'))
+  const r16 = splitMatches(getPhaseMatches('round_16'))
+  const qf = splitMatches(getPhaseMatches('quarter'))
+  const sf = splitMatches(getPhaseMatches('semi'))
+  
+  const finalMatch = getPhaseMatches('final')[0]
+  const thirdPlaceMatch = getPhaseMatches('third_place')[0]
 
   const BracketNode = ({ match }: { match: MatchWithTeams }) => {
     const pred: any = userPredictions.find(p => p.match_id === match.id)
     const realCurrentTime = new Date(new Date().getTime() + timeOffset)
-    const isLocked = normalizeDate(match.match_date) <= realCurrentTime || match.status !== 'pending'
+    const isLocked = match.match_date ? (normalizeDate(match.match_date) <= realCurrentTime || match.status !== 'pending') : false
 
     const homeTeamName = match.home_team?.name || 'A Def.'
     const awayTeamName = match.away_team?.name || 'A Def.'
@@ -228,11 +327,11 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
       <div
         onClick={() => { if (isReady) setSelectedMatch({ match, pred }) }}
         className={`relative flex flex-col p-2 w-48 border rounded-lg shadow-sm transition-all
-          ${isLocked ? 'bg-muted/30 border-border/50' : isReady ? 'bg-card cursor-pointer hover:border-primary hover:shadow-md' : 'bg-muted/10 opacity-60'}
+          ${isLocked ? 'bg-muted/30 border-border/50' : isReady ? 'bg-card cursor-pointer hover:border-primary hover:shadow-md hover:scale-105' : 'bg-muted/10 opacity-60'}
         `}
       >
         <div className="text-[10px] text-muted-foreground mb-1 text-center border-b pb-1">
-          {formatDate(match.match_date).split(',')[0]}
+          {formatDate(match.match_date).replace(',', ' -')}
         </div>
 
         <div className="flex items-center justify-between py-1">
@@ -240,7 +339,6 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
             {match.home_team?.flag_code ? <TeamFlag flagCode={match.home_team.flag_code} /> : <div className="w-5 h-4 bg-muted rounded"></div>}
             <span className="text-xs font-medium truncate">
               {homeTeamName}
-              {/* Asterisco amarelo se este for o vencedor dos pênaltis */}
               {pred?.home_score === pred?.away_score && pred?.penalty_winner === 'home' && <span className="text-yellow-500 ml-1 font-black" title="Vence nos Pênaltis">*</span>}
             </span>
           </div>
@@ -254,7 +352,6 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
             {match.away_team?.flag_code ? <TeamFlag flagCode={match.away_team.flag_code} /> : <div className="w-5 h-4 bg-muted rounded"></div>}
             <span className="text-xs font-medium truncate">
               {awayTeamName}
-              {/* Asterisco amarelo se este for o vencedor dos pênaltis */}
               {pred?.home_score === pred?.away_score && pred?.penalty_winner === 'away' && <span className="text-yellow-500 ml-1 font-black" title="Vence nos Pênaltis">*</span>}
             </span>
           </div>
@@ -272,27 +369,69 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
     )
   }
 
+  const BracketColumn = ({ phase, matches }: { phase: string, matches: MatchWithTeams[] }) => {
+    if (!matches || matches.length === 0) return null 
+    return (
+      <div className="flex flex-col justify-around min-w-[12rem] gap-4 py-4 h-full">
+        <h3 className="font-bold text-center text-[11px] uppercase tracking-wider text-muted-foreground mb-2 sticky top-0">
+          {getPhaseLabel(phase)}
+        </h3>
+        <div className="flex flex-col flex-1 justify-around gap-6 h-full">
+          {matches.map(match => (
+            <BracketNode key={match.id} match={match} />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="w-full">
-      <div className="bg-muted/20 border border-dashed rounded-xl p-4 overflow-x-auto custom-scrollbar">
-        <div className="flex gap-8 min-w-max pb-4">
-          {phases.map(phase => {
-            const phaseMatches = allMatches.filter(m => m.phase === phase).sort((a, b) => new Date(a.match_date).getTime() - new Date(b.match_date).getTime())
-            if (phaseMatches.length === 0) return null
+      <div className="bg-muted/10 border border-dashed rounded-xl overflow-x-auto custom-scrollbar">
+        <div className="flex justify-between min-w-max gap-8 px-8 pb-8 pt-4">
+          
+          {/* ESQUERDA */}
+          <div className="flex gap-6 h-full">
+            <BracketColumn phase="round_32" matches={r32.left} />
+            <BracketColumn phase="round_16" matches={r16.left} />
+            <BracketColumn phase="quarter" matches={qf.left} />
+            <BracketColumn phase="semi" matches={sf.left} />
+          </div>
 
-            return (
-              <div key={phase} className="flex flex-col gap-4 relative">
-                <h3 className="font-bold text-center text-sm uppercase tracking-wider text-muted-foreground sticky top-0 bg-background/90 py-1 rounded-md backdrop-blur-sm z-10">
-                  {getPhaseLabel(phase)}
-                </h3>
-                <div className="flex flex-col gap-6 justify-center flex-1 py-4">
-                  {phaseMatches.map(match => (
-                    <BracketNode key={match.id} match={match} />
-                  ))}
-                </div>
+          {/* CENTRO */}
+          <div className="flex flex-col justify-center items-center gap-16 min-w-[260px] px-4 border-x border-border/50">
+            {finalMatch ? (
+              <div className="flex flex-col items-center gap-3">
+                <span className="font-black text-yellow-600 text-xs uppercase tracking-widest bg-yellow-500/10 border border-yellow-500/30 px-4 py-1.5 rounded-full shadow-sm">
+                  🏆 Grande Final
+                </span>
+                <BracketNode match={finalMatch} />
               </div>
-            )
-          })}
+            ) : (
+              <div className="flex flex-col items-center gap-2 opacity-50">
+                <span className="font-bold text-muted-foreground text-xs uppercase">Final</span>
+                <div className="w-48 h-20 border-2 border-dashed border-border rounded-lg"></div>
+              </div>
+            )}
+
+            {thirdPlaceMatch && (
+              <div className="flex flex-col items-center gap-3 mt-8">
+                <span className="font-bold text-muted-foreground text-[10px] uppercase tracking-widest">
+                  🥉 Disputa do 3º Lugar
+                </span>
+                <BracketNode match={thirdPlaceMatch} />
+              </div>
+            )}
+          </div>
+
+          {/* DIREITA */}
+          <div className="flex flex-row-reverse gap-6 h-full">
+            <BracketColumn phase="round_32" matches={r32.right} />
+            <BracketColumn phase="round_16" matches={r16.right} />
+            <BracketColumn phase="quarter" matches={qf.right} />
+            <BracketColumn phase="semi" matches={sf.right} />
+          </div>
+
         </div>
       </div>
 
