@@ -282,21 +282,20 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
   const getPhaseMatches = (phase: string) => {
   const matches = allMatches.filter(m => m.phase === phase);
   
-  // Criamos um mapa para garantir que, se houver dois jogos entre os mesmos times, 
-  // só o primeiro prevaleça
+  // Limpeza de segurança para evitar que a tela quebre caso o banco traga duplicatas
   const uniqueMatches = new Map();
-  
   matches.forEach(m => {
-    // Cria uma chave única baseada nos IDs dos times
     const key = [m.home_team_id, m.away_team_id].sort().join('-');
-    if (!uniqueMatches.has(key)) {
-      uniqueMatches.set(key, m);
-    }
+    if (!uniqueMatches.has(key)) uniqueMatches.set(key, m);
   });
+  
+  const uniqueArray = Array.from(uniqueMatches.values());
 
-  return Array.from(uniqueMatches.values())
-    .sort((a, b) => new Date(a.match_date).getTime() - new Date(b.match_date).getTime());
+  // A MÁGICA ACONTECE AQUI: 
+  // O frontend apenas lê os IDs da API em ordem crescente, garantindo o chaveamento oficial
+  return uniqueArray.sort((a, b) => a.api_id - b.api_id);
 };
+
 
   // 2. Agora nós dividimos usando o nosso roteador em vez de cortar no meio!
   const splitMatches = (matches: MatchWithTeams[]) => {
