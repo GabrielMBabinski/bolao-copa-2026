@@ -41,7 +41,25 @@ const getPhaseLabel = (phase: string) => {
 }
 
 // --- COMPONENTE DE LISTA DE AMIGOS ---
-const FriendsPredictionsList = ({ matchId, matchDate, timeOffset, isFinished }: { matchId: string, matchDate: string, timeOffset: number, isFinished: boolean }) => {
+// --- COMPONENTE DE LISTA DE AMIGOS ---
+// --- COMPONENTE DE LISTA DE AMIGOS ---
+const FriendsPredictionsList = ({ 
+  matchId, 
+  matchDate, 
+  timeOffset, 
+  isFinished,
+  actualHomeScore,      // <-- NOVO
+  actualAwayScore,      // <-- NOVO
+  actualPenaltyWinner   // <-- NOVO
+}: { 
+  matchId: string, 
+  matchDate: string, 
+  timeOffset: number, 
+  isFinished: boolean,
+  actualHomeScore?: number | null,
+  actualAwayScore?: number | null,
+  actualPenaltyWinner?: string | null
+}) => {
   const [show, setShow] = useState(false)
   const [list, setList] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
@@ -80,27 +98,49 @@ const FriendsPredictionsList = ({ matchId, matchDate, timeOffset, isFinished }: 
         <Users className="h-4 w-4 mr-2" />
         {show ? 'Ocultar palpites da galera' : 'Ver palpites da galera'}
       </Button>
+      
       {show && (
-        <div className="mt-3 p-3 bg-muted rounded-lg space-y-2">
-          {loading ? <div className="text-sm text-center animate-pulse">Carregando palpites...</div> :
-            list.length === 0 ? <div className="text-sm text-center">Ninguém mais palpitou.</div> :
-              list.map((p, i) => (
-                <div key={i} className="flex items-center justify-between text-sm bg-background p-2 rounded border border-border/50 shadow-sm">
-                  <span className="truncate font-medium">{p.profiles?.name || 'Anônimo'}</span>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="font-bold text-primary">
-                      {p.home_score} x {p.away_score}
-                      {/* Mostra asterisco se empatou e escolheu alguem nos penaltis */}
-                      {p.home_score === p.away_score && p.penalty_winner && <span className="text-yellow-500 ml-1">*</span>}
-                    </Badge>
-                    {isFinished && p.points_earned !== null && p.points_earned !== undefined && (
-                      <Badge className={`${p.points_earned > 0 ? "bg-green-600 text-white" : "bg-muted-foreground text-white"} ml-2 min-w-[50px] justify-center`}>
-                        {p.points_earned} pts
+        <div className="mt-3 bg-muted rounded-lg border border-border/50 overflow-hidden">
+          
+          {/* --- NOVO: PLACAR OFICIAL DO JOGO --- */}
+          {isFinished && actualHomeScore !== null && actualHomeScore !== undefined && (
+            <div className="bg-slate-900/40 p-3 text-center border-b border-border/50 flex flex-col items-center justify-center">
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider font-bold mb-1">Resultado Oficial</span>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-sm font-bold bg-slate-950 px-3 py-1 shadow-inner">
+                  {actualHomeScore} x {actualAwayScore}
+                </Badge>
+                {/* Exibe o badge de pênaltis se o jogo terminou empatado e teve vencedor */}
+                {actualPenaltyWinner && (
+                  <Badge className="bg-yellow-600 hover:bg-yellow-700 text-white text-[10px] uppercase font-bold border-none">
+                    {actualPenaltyWinner === 'home' ? 'Mandante' : 'Visitante'} venceu nos pênaltis
+                  </Badge>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* --- LISTA DE PALPITES COM A BARRA CUSTOMIZADA --- */}
+          <div className="p-3 space-y-2 max-h-[40vh] overflow-y-auto custom-scrollbar">
+            {loading ? <div className="text-sm text-center animate-pulse py-4">Carregando palpites...</div> :
+              list.length === 0 ? <div className="text-sm text-center py-4">Ninguém mais palpitou.</div> :
+                list.map((p, i) => (
+                  <div key={i} className="flex items-center justify-between text-sm bg-background p-2 rounded border border-border/50 shadow-sm">
+                    <span className="truncate font-medium pr-2">{p.profiles?.name || 'Anônimo'}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Badge variant="secondary" className="font-bold text-primary">
+                        {p.home_score} x {p.away_score}
+                        {p.home_score === p.away_score && p.penalty_winner && <span className="text-yellow-500 ml-1">*</span>}
                       </Badge>
-                    )}
+                      {isFinished && p.points_earned !== null && p.points_earned !== undefined && (
+                        <Badge className={`${p.points_earned > 0 ? "bg-green-600 text-white" : "bg-slate-600 text-white"} ml-1 min-w-[50px] justify-center border-none`}>
+                          {p.points_earned} pts
+                        </Badge>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+          </div>
         </div>
       )}
     </div>
@@ -210,7 +250,18 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', ini
         ) : null}
       </div>
 
-      {isLocked && <FriendsPredictionsList matchId={match.id} matchDate={match.match_date} timeOffset={timeOffset} isFinished={isFinished} />}
+      {isLocked && (
+        <FriendsPredictionsList 
+          matchId={match.id} 
+          matchDate={match.match_date} 
+          timeOffset={timeOffset} 
+          isFinished={isFinished} 
+          // 👇 SÓ ADICIONAR ESTAS 3 LINHAS AQUI 👇
+          actualHomeScore={match.home_score}
+          actualAwayScore={match.away_score}
+          actualPenaltyWinner={match.penalty_winner}
+        />
+      )}
     </div>
   )
 }
