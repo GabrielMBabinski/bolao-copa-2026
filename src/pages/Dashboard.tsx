@@ -5,7 +5,7 @@ import { matches, profiles } from '@/lib/supabaseClient'
 import type { MatchWithTeams } from '@/types/database'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Calendar, Clock, Trophy, BadgeDollarSign, CheckCircle2, ChevronDown } from 'lucide-react'
+import { Calendar, Clock, Trophy, BadgeDollarSign, CheckCircle2, ChevronDown, XCircle } from 'lucide-react'
 import TeamFlag from '@/components/TeamFlag'
 import UserAvatar from '@/components/UserAvatar'
 
@@ -36,7 +36,7 @@ export default function Dashboard() {
     const timer = setTimeout(() => {
       setShowPoster(false)
     }, 5000) // 5000 = 5 segundos
-    
+
     return () => clearTimeout(timer)
   }, [])
 
@@ -122,7 +122,7 @@ export default function Dashboard() {
       </div>
 
       <div className="relative w-full h-40 sm:h-64 md:h-80 rounded-2xl overflow-hidden mb-8 shadow-xl border border-muted group bg-black">
-        
+
         {/* VÍDEO (Fica rodando no fundo) */}
         <video
           src="/Neymar-4K.mp4"
@@ -137,9 +137,8 @@ export default function Dashboard() {
         <img
           src="/Ney-virginia.png"
           alt="Capa do Banner"
-          className={`absolute inset-0 w-full h-full object-cover object-center transition-all duration-1000 ease-in-out z-10 pointer-events-none group-hover:scale-105 ${
-            showPoster ? 'opacity-100' : 'opacity-0'
-          }`}
+          className={`absolute inset-0 w-full h-full object-cover object-center transition-all duration-1000 ease-in-out z-10 pointer-events-none group-hover:scale-105 ${showPoster ? 'opacity-100' : 'opacity-0'
+            }`}
         />
 
         {/* GRADIENTE (Para escurecer o fundo) - Agora com z-20 para ficar por cima de tudo */}
@@ -344,7 +343,12 @@ export default function Dashboard() {
                     <span className="font-medium text-sm sm:text-base truncate max-w-[120px] sm:max-w-[200px]">{user.name}</span>
                   </div>
 
-                  {user.payment_status === 'paid' ? (
+                  {/* 👇 NOVA LÓGICA DE STATUS 👇 */}
+                  {user.contributes_to_prize === false ? (
+                    <span className="flex items-center gap-1 text-xs font-bold text-red-600 bg-red-500/10 px-2 py-1 rounded-md">
+                      <XCircle className="h-4 w-4" /> Não Pago
+                    </span>
+                  ) : user.payment_status === 'paid' ? (
                     <span className="flex items-center gap-1 text-xs font-bold text-green-600 bg-green-500/10 px-2 py-1 rounded-md">
                       <CheckCircle2 className="h-4 w-4" /> Pago
                     </span>
@@ -357,6 +361,7 @@ export default function Dashboard() {
                       Aguardando
                     </span>
                   )}
+
                 </div>
               ))}
             </div>
@@ -368,8 +373,8 @@ export default function Dashboard() {
         <button
           onClick={scrollToPayment}
           className={`fixed bottom-6 right-6 md:bottom-8 md:right-8 z-50 flex items-center gap-2 bg-yellow-500 text-white px-5 py-3 sm:px-6 sm:py-4 rounded-full shadow-[0_0_20px_rgba(234,179,8,0.4)] transition-all duration-500 group ${isPaymentVisible
-              ? 'opacity-0 translate-y-10 pointer-events-none'
-              : 'opacity-100 translate-y-0 hover:bg-yellow-600 hover:scale-105 hover:-translate-y-1'
+            ? 'opacity-0 translate-y-10 pointer-events-none'
+            : 'opacity-100 translate-y-0 hover:bg-yellow-600 hover:scale-105 hover:-translate-y-1'
             }`}
         >
           <BadgeDollarSign className="h-5 w-5 sm:h-6 sm:w-6 animate-pulse" />
