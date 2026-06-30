@@ -48,9 +48,11 @@ const FriendsPredictionsList = ({
   matchDate,
   timeOffset,
   isFinished,
-  actualHomeScore,      // <-- NOVO
-  actualAwayScore,      // <-- NOVO
-  actualPenaltyWinner   // <-- NOVO
+  actualHomeScore,
+  actualAwayScore,
+  actualPenaltyWinner,
+  homeTeamName, // Adicione isto
+  awayTeamName  // Adicione isto
 }: {
   matchId: string,
   matchDate: string,
@@ -58,7 +60,9 @@ const FriendsPredictionsList = ({
   isFinished: boolean,
   actualHomeScore?: number | null,
   actualAwayScore?: number | null,
-  actualPenaltyWinner?: string | null
+  actualPenaltyWinner?: string | null,
+  homeTeamName?: string, // Adicione isto
+  awayTeamName?: string  // Adicione isto
 }) => {
   const [show, setShow] = useState(false)
   const [list, setList] = useState<any[]>([])
@@ -113,7 +117,10 @@ const FriendsPredictionsList = ({
                 {/* Exibe o badge de pênaltis se o jogo terminou empatado e teve vencedor */}
                 {actualPenaltyWinner && (
                   <Badge className="bg-yellow-600 hover:bg-yellow-700 text-white text-[10px] uppercase font-bold border-none">
-                    {actualPenaltyWinner === 'home' ? 'Mandante' : 'Visitante'} venceu nos pênaltis
+                    {actualPenaltyWinner === 'home'
+                      ? `${homeTeamName || 'Mandante'} venceu nos pênaltis`
+                      : `${awayTeamName || 'Visitante'} venceu nos pênaltis`
+                    }
                   </Badge>
                 )}
               </div>
@@ -256,10 +263,11 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', ini
           matchDate={match.match_date}
           timeOffset={timeOffset}
           isFinished={isFinished}
-          // 👇 SÓ ADICIONAR ESTAS 3 LINHAS AQUI 👇
           actualHomeScore={match.home_score}
           actualAwayScore={match.away_score}
           actualPenaltyWinner={match.penalty_winner}
+          homeTeamName={match.home_team?.name} // Passe o nome aqui
+          awayTeamName={match.away_team?.name} // Passe o nome aqui
         />
       )}
     </div>

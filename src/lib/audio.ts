@@ -1,6 +1,6 @@
 // src/lib/audio.ts
 
-export const siteAudio = new Audio('/Neymar-audio.mp3');
+export const siteAudio = new Audio();
 siteAudio.loop = true;
 siteAudio.volume = 1.0; 
 

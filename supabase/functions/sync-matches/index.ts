@@ -87,15 +87,15 @@ serve(async (req) => {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 segundos de timeout limite
 
-        apiResponse = await fetch(apiUrl, { 
+        apiResponse = await fetch(apiUrl, {
           headers: { 'X-Auth-Token': footballDataToken },
           signal: controller.signal
         });
-        
+
         clearTimeout(timeoutId);
 
         if (!apiResponse.ok) throw new Error(`HTTP Error: ${apiResponse.status}`);
-        
+
         apiData = await apiResponse.json();
         break; // Sucesso, sai do loop de tentativas
       } catch (e: any) {
@@ -150,20 +150,32 @@ serve(async (req) => {
 
       const dbPhase = PHASE_DICTIONARY[match.stage] || 'group'
 
-      const homeScore = match.score?.fullTime?.home ?? null
-      const awayScore = match.score?.fullTime?.away ?? null
+      const homeScore = match.score?.fullTime?.home ?? null;
+      const awayScore = match.score?.fullTime?.away ?? null;
 
-      let dbPenaltyWinner = null
+      let dbPenaltyWinner = null;
+      // A API football-data retorna o status duration como 'PENALTY_SHOOTOUT' 
       if (match.score?.duration === 'PENALTY_SHOOTOUT') {
-        const homePen = match.score?.penalties?.home ?? 0
-        const awayPen = match.score?.penalties?.away ?? 0
-        if (homePen > awayPen) dbPenaltyWinner = 'home'
-        else if (awayPen > homePen) dbPenaltyWinner = 'away'
+        const homePen = match.score?.penalties?.home ?? 0;
+        const awayPen = match.score?.penalties?.away ?? 0;
+
+        // Define o vencedor com base na contagem de pênaltis
+        if (homePen > awayPen) dbPenaltyWinner = 'home';
+        else if (awayPen > homePen) dbPenaltyWinner = 'away';
+
+        // Log de debug para conferência
+        console.log(`Debug Pênaltis: ${match.homeTeam.name} (${homePen}) x (${awayPen}) ${match.awayTeam.name} | Vencedor: ${dbPenaltyWinner}`);
+      }
+
+      // IMPORTANTE: Se o jogo terminou mas não houve pênaltis, 
+      // certifique-se de que não estamos carregando um vencedor de pênaltis "fantasma"
+      if (match.status === 'FINISHED' && match.score?.duration !== 'PENALTY_SHOOTOUT') {
+        dbPenaltyWinner = null;
       }
 
       // Identifica se o jogo já existe no banco de dados
-      const existingMatch = dbMatches.find(m => 
-        m.api_id === match.id || 
+      const existingMatch = dbMatches.find(m =>
+        m.api_id === match.id ||
         (m.home_team_id === hId && m.away_team_id === aId && m.phase === dbPhase)
       )
 
@@ -180,7 +192,7 @@ serve(async (req) => {
 
       if (existingMatch) {
         // --- LOGICA DE UPDATE ---
-        const needsUpdate = 
+        const needsUpdate =
           existingMatch.home_score !== homeScore ||
           existingMatch.away_score !== awayScore ||
           existingMatch.status !== dbStatus ||
@@ -220,6 +232,10 @@ serve(async (req) => {
             penalty_winner: dbPenaltyWinner
           })
 
+        if (match.id === ID_DO_JOGO_ALEMANHA_PARAGUAI) {
+          console.log("DADOS DA API PARA O JOGO:", JSON.stringify(match.score, null, 2));
+        }
+
         if (!insertError) {
           console.log(`✅ NOVO CONFRONTO INSERIDO: ${match.homeTeam.name} x ${match.awayTeam.name} (${dbPhase})`)
           insertCount++
@@ -230,10 +246,10 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ 
-        message: 'Sincronização executada com sucesso', 
-        jogos_inseridos: insertCount, 
-        jogos_atualizados: updateCount 
+      JSON.stringify({
+        message: 'Sincronização executada com sucesso',
+        jogos_inseridos: insertCount,
+        jogos_atualizados: updateCount
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
