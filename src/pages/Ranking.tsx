@@ -91,9 +91,9 @@ export default function Ranking() {
               </p>
             </div>
           </div>
-          <div className="bg-yellow-500 text-white font-black px-4 py-2 rounded-lg text-sm sm:text-base uppercase tracking-wide shadow-md transform -rotate-2">
+          {/*<div className="bg-yellow-500 text-white font-black px-4 py-2 rounded-lg text-sm sm:text-base uppercase tracking-wide shadow-md transform -rotate-2">
             O 1º Lugar leva tudo!
-          </div>
+          </div>*/}
         </div>
       )}
 
@@ -158,13 +158,13 @@ export default function Ranking() {
                               <div className="font-bold text-base flex flex-wrap items-center gap-2">
                                 {profile.name}
 
-                                {/* TAG DO PRÊMIO APENAS PARA O ELEGÍVEL */}
+                                {/* TAG DO PRÊMIO APENAS PARA O ELEGÍVEL 
                                 {profile.id === eligibleWinner?.id && totalPrize > 0 && (
                                   <span className="inline-flex items-center gap-1 text-[10px] font-black text-yellow-700 bg-yellow-400 px-2 py-0.5 rounded-full uppercase shadow-sm">
                                     <BadgeDollarSign className="h-3 w-3" />
                                     Leva os R$ {totalPrize.toFixed(2).replace('.', ',')}
                                   </span>
-                                )}
+                                )}*/}
                               </div>
                               <div className="flex gap-2 items-center mt-1">
                                 {profile.is_admin && (
