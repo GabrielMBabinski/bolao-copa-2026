@@ -430,7 +430,6 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
   const showQF = hasKnownTeam(qf.left) || hasKnownTeam(qf.right)
   const showSF = hasKnownTeam(sf.left) || hasKnownTeam(sf.right)
 
-  // 👇 AQUI ESTAVA O PROBLEMA! Esta declaração tinha sumido 👇
   const BracketNode = ({ match }: { match: MatchWithTeams }) => {
     const pred: any = userPredictions.find(p => p.match_id === match.id)
     const realCurrentTime = new Date(new Date().getTime() + timeOffset)
@@ -438,17 +437,28 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
 
     const homeTeamName = match.home_team?.name || 'A Def.'
     const awayTeamName = match.away_team?.name || 'A Def.'
+
     const isReady = match.home_team && match.away_team
+
+    // 👇 NOVA REGRA: Verifica se o jogo é oficial do banco ou apenas visual ("derived")
+    const isOfficial = match.id && !match.id.toString().startsWith('derived-')
+    // Só pode clicar se os times estiverem definidos E for um jogo oficial
+    const canClick = isReady && isOfficial
 
     return (
       <div
-        onClick={() => { if (isReady) setSelectedMatch({ match, pred }) }}
+        onClick={() => { if (canClick) setSelectedMatch({ match, pred }) }}
         className={`relative flex flex-col p-2 w-48 border rounded-lg shadow-sm transition-all
-            ${isLocked ? 'bg-muted/30 border-border/50' : isReady ? 'bg-card cursor-pointer hover:border-primary hover:shadow-md hover:scale-105' : 'bg-muted/10 opacity-60'}
+            ${!isOfficial || !isReady
+            ? 'bg-muted/10 opacity-50 cursor-default' // Jogo visual: Sem hover, sem clique
+            : isLocked
+              ? 'bg-muted/30 border-border/50 cursor-pointer hover:border-primary/50' // Jogo encerrado: Pode clicar pra ver a galera
+              : 'bg-card cursor-pointer hover:border-primary hover:shadow-md hover:scale-105' // Jogo aberto: Destaque total
+          }
           `}
       >
         <div className="text-[10px] text-muted-foreground mb-1 text-center border-b pb-1">
-          {match.match_date ? formatDate(match.match_date).replace(',', ' -') : 'Data a definir'}
+          {match.match_date ? formatDate(match.match_date).replace(',', ' -') : 'Aguardando Oficialização'}
         </div>
 
         <div className="flex items-center justify-between py-1">
@@ -456,7 +466,7 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
             {match.home_team?.flag_code ? <TeamFlag flagCode={match.home_team.flag_code} /> : <div className="w-5 h-4 bg-muted rounded"></div>}
             <span className="text-xs font-medium truncate">
               {homeTeamName}
-              {pred?.home_score === pred?.away_score && pred?.penalty_winner === 'home' && <span className="text-yellow-500 ml-1 font-black" title="Vence nos Pênaltis">*</span>}
+              {pred?.home_score === pred?.away_score && pred?.penalty_winner === 'home' && <span className="text-yellow-500 ml-1 font-black" title="Vence nos Pênaltis">★</span>}
             </span>
           </div>
           <span className={`text-xs font-bold w-6 text-center rounded ${pred ? 'bg-primary/20 text-primary' : 'bg-muted'}`}>
@@ -469,7 +479,7 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
             {match.away_team?.flag_code ? <TeamFlag flagCode={match.away_team.flag_code} /> : <div className="w-5 h-4 bg-muted rounded"></div>}
             <span className="text-xs font-medium truncate">
               {awayTeamName}
-              {pred?.home_score === pred?.away_score && pred?.penalty_winner === 'away' && <span className="text-yellow-500 ml-1 font-black" title="Vence nos Pênaltis">*</span>}
+              {pred?.home_score === pred?.away_score && pred?.penalty_winner === 'away' && <span className="text-yellow-500 ml-1 font-black" title="Vence nos Pênaltis">★</span>}
             </span>
           </div>
           <span className={`text-xs font-bold w-6 text-center rounded ${pred ? 'bg-primary/20 text-primary' : 'bg-muted'}`}>
