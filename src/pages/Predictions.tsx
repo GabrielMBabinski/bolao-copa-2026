@@ -138,14 +138,14 @@ const FriendsPredictionsList = ({
                       <Badge variant="secondary" className="font-bold text-primary flex items-center">
                         {/* Se o palpite foi empate e ele escolheu o mandante ('home'), estrela na esquerda */}
                         {p.home_score === p.away_score && p.penalty_winner === 'home' && (
-                           <span className="text-yellow-500 mr-1" title={`${homeTeamName || 'Mandante'} vence nos pênaltis`}>★</span>
+                          <span className="text-yellow-500 mr-1" title={`${homeTeamName || 'Mandante'} vence nos pênaltis`}>★</span>
                         )}
-                        
+
                         {p.home_score} x {p.away_score}
-                        
+
                         {/* Se o palpite foi empate e ele escolheu o visitante ('away'), estrela na direita */}
                         {p.home_score === p.away_score && p.penalty_winner === 'away' && (
-                           <span className="text-yellow-500 ml-1" title={`${awayTeamName || 'Visitante'} vence nos pênaltis`}>★</span>
+                          <span className="text-yellow-500 ml-1" title={`${awayTeamName || 'Visitante'} vence nos pênaltis`}>★</span>
                         )}
                       </Badge>
                       {isFinished && p.points_earned !== null && p.points_earned !== undefined && (
@@ -371,28 +371,52 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
     }
   }
 
+  const mergePhase = (derivedMatches: any[], apiMatches: any[]) => {
+    if (!apiMatches || apiMatches.length === 0) return derivedMatches;
+
+    const usedApiIds = new Set();
+
+    return derivedMatches.map(derived => {
+      // Procura o jogo oficial na API cruzando pelo menos 1 dos times (home ou away)
+      const official = apiMatches.find(m => {
+        if (usedApiIds.has(m.id)) return false;
+        const hasHome = derived.home_team && (m.home_team_id === derived.home_team.id || m.away_team_id === derived.home_team.id);
+        const hasAway = derived.away_team && (m.home_team_id === derived.away_team.id || m.away_team_id === derived.away_team.id);
+        return hasHome || hasAway;
+      });
+
+      if (official) {
+        usedApiIds.add(official.id);
+        return official;
+      }
+      return derived;
+    });
+  };
+
+  // 👇 2. A ÁRVORE INTELIGENTE ATUALIZADA 👇
+
   // 16-AVOS (Base oficial da API)
   const r32 = splitMatches(getPhaseMatches('round_32'))
 
   // OITAVAS
   const apiR16 = splitMatches(getPhaseMatches('round_16'))
   const r16 = {
-    left: apiR16.left.length > 0 ? apiR16.left : deriveNextPhase(r32.left),
-    right: apiR16.right.length > 0 ? apiR16.right : deriveNextPhase(r32.right)
+    left: mergePhase(deriveNextPhase(r32.left), apiR16.left),
+    right: mergePhase(deriveNextPhase(r32.right), apiR16.right)
   }
 
   // QUARTAS
   const apiQf = splitMatches(getPhaseMatches('quarter'))
   const qf = {
-    left: apiQf.left.length > 0 ? apiQf.left : deriveNextPhase(r16.left),
-    right: apiQf.right.length > 0 ? apiQf.right : deriveNextPhase(r16.right)
+    left: mergePhase(deriveNextPhase(r16.left), apiQf.left),
+    right: mergePhase(deriveNextPhase(r16.right), apiQf.right)
   }
 
   // SEMIFINAIS
   const apiSf = splitMatches(getPhaseMatches('semi'))
   const sf = {
-    left: apiSf.left.length > 0 ? apiSf.left : deriveNextPhase(qf.left),
-    right: apiSf.right.length > 0 ? apiSf.right : deriveNextPhase(qf.right)
+    left: mergePhase(deriveNextPhase(qf.left), apiSf.left),
+    right: mergePhase(deriveNextPhase(qf.right), apiSf.right)
   }
 
   // Finais...
