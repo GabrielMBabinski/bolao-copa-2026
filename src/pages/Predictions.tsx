@@ -317,6 +317,9 @@ const deriveNextPhase = (previousPhaseMatches: any[]) => {
 // --- COMPONENTE: ÁRVORE DO MATA-MATA (ESTILO FIFA) ---
 const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { allMatches: MatchWithTeams[], userPredictions: PredictionWithMatch[], onSave: any, timeOffset: number }) => {
   const [selectedMatch, setSelectedMatch] = useState<{ match: MatchWithTeams, pred: any } | null>(null)
+  
+  // 👇 NOVO ESTADO: Guarda qual fase está com o "Zoom"
+  const [focusedPhase, setFocusedPhase] = useState<string | null>(null)
 
   // 1. O ROTEADOR DE CHAVES
   const LEFT_BRACKET_TEAMS = [
@@ -430,6 +433,29 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
   const showQF = hasKnownTeam(qf.left) || hasKnownTeam(qf.right)
   const showSF = hasKnownTeam(sf.left) || hasKnownTeam(sf.right)
 
+  //Verifica se TODOS os jogos da fase já vieram da API (ID não começa com 'derived-')
+  const isPhaseConfirmed = (left: MatchWithTeams[], right: MatchWithTeams[]) => {
+    const all = [...left, ...right];
+    if (all.length === 0) return false;
+    return all.every(m => m.id && !m.id.toString().startsWith('derived-') && m.home_team && m.away_team);
+  }
+
+  const r32Confirmed = isPhaseConfirmed(r32.left, r32.right);
+  const r16Confirmed = isPhaseConfirmed(r16.left, r16.right);
+  const qfConfirmed = isPhaseConfirmed(qf.left, qf.right);
+  const sfConfirmed = isPhaseConfirmed(sf.left, sf.right);
+
+  const phaseLevels: Record<string, number> = { round_32: 0, round_16: 1, quarter: 2, semi: 3, final: 4 };
+
+  const isPhaseVisible = (phase: string) => {
+    // Se não tem filtro, mostra tudo
+    if (!focusedPhase) return true;
+    // Regra especial pros 16-avos: se clicar nele, mostra só ele (como você pediu)
+    if (focusedPhase === 'round_32') return phase === 'round_32';
+    // Para as outras fases: mostra a fase clicada e todas as que vêm DEPOIS dela
+    return phaseLevels[phase] >= phaseLevels[focusedPhase];
+  };
+
   const BracketNode = ({ match }: { match: MatchWithTeams }) => {
     const pred: any = userPredictions.find(p => p.match_id === match.id)
     const realCurrentTime = new Date(new Date().getTime() + timeOffset)
@@ -437,24 +463,31 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
 
     const homeTeamName = match.home_team?.name || 'A Def.'
     const awayTeamName = match.away_team?.name || 'A Def.'
-
+    
     const isReady = match.home_team && match.away_team
-
-    // 👇 NOVA REGRA: Verifica se o jogo é oficial do banco ou apenas visual ("derived")
     const isOfficial = match.id && !match.id.toString().startsWith('derived-')
-    // Só pode clicar se os times estiverem definidos E for um jogo oficial
     const canClick = isReady && isOfficial
+
+    // 👇 NOVA LÓGICA: Decide se vai mostrar o placar Real ou o Palpite
+    const isRealScore = match.home_score !== null && match.home_score !== undefined;
+    
+    const displayHomeScore = isRealScore ? match.home_score : (pred?.home_score ?? '-');
+    const displayAwayScore = isRealScore ? match.away_score : (pred?.away_score ?? '-');
+    
+    // A estrela também acompanha: mostra a real se o jogo acabou, ou a do palpite se ainda não
+    const isHomePenalty = isRealScore ? match.penalty_winner === 'home' : (pred?.home_score === pred?.away_score && pred?.penalty_winner === 'home');
+    const isAwayPenalty = isRealScore ? match.penalty_winner === 'away' : (pred?.home_score === pred?.away_score && pred?.penalty_winner === 'away');
 
     return (
       <div
         onClick={() => { if (canClick) setSelectedMatch({ match, pred }) }}
         className={`relative flex flex-col p-2 w-48 border rounded-lg shadow-sm transition-all
-            ${!isOfficial || !isReady
-            ? 'bg-muted/10 opacity-50 cursor-default' // Jogo visual: Sem hover, sem clique
-            : isLocked
-              ? 'bg-muted/30 border-border/50 cursor-pointer hover:border-primary/50' // Jogo encerrado: Pode clicar pra ver a galera
-              : 'bg-card cursor-pointer hover:border-primary hover:shadow-md hover:scale-105' // Jogo aberto: Destaque total
-          }
+            ${!isOfficial || !isReady 
+              ? 'bg-muted/10 opacity-50 cursor-default' 
+              : isLocked 
+                ? 'bg-muted/30 border-border/50 cursor-pointer hover:border-primary/50' 
+                : 'bg-card cursor-pointer hover:border-primary hover:shadow-md hover:scale-105'
+            }
           `}
       >
         <div className="text-[10px] text-muted-foreground mb-1 text-center border-b pb-1">
@@ -466,11 +499,12 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
             {match.home_team?.flag_code ? <TeamFlag flagCode={match.home_team.flag_code} /> : <div className="w-5 h-4 bg-muted rounded"></div>}
             <span className="text-xs font-medium truncate">
               {homeTeamName}
-              {pred?.home_score === pred?.away_score && pred?.penalty_winner === 'home' && <span className="text-yellow-500 ml-1 font-black" title="Vence nos Pênaltis">★</span>}
+              {isHomePenalty && <span className="text-yellow-500 ml-1 font-black" title="Vence nos Pênaltis">★</span>}
             </span>
           </div>
-          <span className={`text-xs font-bold w-6 text-center rounded ${pred ? 'bg-primary/20 text-primary' : 'bg-muted'}`}>
-            {pred ? pred.home_score : '-'}
+          {/* O background muda de cor se for o resultado oficial ou apenas o palpite */}
+          <span className={`text-xs font-bold w-6 text-center rounded ${isRealScore ? 'bg-slate-700 text-white' : (pred ? 'bg-primary/20 text-primary' : 'bg-muted')}`}>
+            {displayHomeScore}
           </span>
         </div>
 
@@ -479,11 +513,11 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
             {match.away_team?.flag_code ? <TeamFlag flagCode={match.away_team.flag_code} /> : <div className="w-5 h-4 bg-muted rounded"></div>}
             <span className="text-xs font-medium truncate">
               {awayTeamName}
-              {pred?.home_score === pred?.away_score && pred?.penalty_winner === 'away' && <span className="text-yellow-500 ml-1 font-black" title="Vence nos Pênaltis">★</span>}
+              {isAwayPenalty && <span className="text-yellow-500 ml-1 font-black" title="Vence nos Pênaltis">★</span>}
             </span>
           </div>
-          <span className={`text-xs font-bold w-6 text-center rounded ${pred ? 'bg-primary/20 text-primary' : 'bg-muted'}`}>
-            {pred ? pred.away_score : '-'}
+          <span className={`text-xs font-bold w-6 text-center rounded ${isRealScore ? 'bg-slate-700 text-white' : (pred ? 'bg-primary/20 text-primary' : 'bg-muted')}`}>
+            {displayAwayScore}
           </span>
         </div>
 
@@ -496,19 +530,32 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
     )
   }
 
-  const BracketColumn = ({ phase, matches }: { phase: string, matches: MatchWithTeams[] }) => {
+  const BracketColumn = ({ phase, matches, isConfirmed }: { phase: string, matches: MatchWithTeams[], isConfirmed: boolean }) => {
     if (!matches || matches.length === 0) return null
-    return (
-      // Removido o h-full para que o flex-item estique naturalmente de acordo com o pai
-      <div className="flex flex-col min-w-[12rem] py-4">
-        <h3 className="font-bold text-center text-[11px] uppercase tracking-wider text-muted-foreground mb-4 shrink-0">
-          {getPhaseLabel(phase)}
-        </h3>
+    
+    // Verifica se esta é a coluna que está em zoom no momento
+    const isFocused = focusedPhase === phase;
 
-        {/* O flex-1 aqui obriga esta área a preencher toda a coluna */}
+    return (
+      <div className="flex flex-col min-w-[12rem] py-4 transition-all duration-500 animate-in fade-in">
+        <button
+          onClick={() => isConfirmed && setFocusedPhase(isFocused ? null : phase)}
+          disabled={!isConfirmed}
+          className={`font-bold text-center text-[11px] uppercase tracking-wider mb-4 shrink-0 flex items-center justify-center gap-1 mx-auto w-full max-w-[160px] transition-all duration-300
+            ${isConfirmed 
+              ? 'text-primary cursor-pointer hover:bg-primary/10 py-1.5 rounded-md border border-transparent hover:border-primary/20' 
+              : 'text-muted-foreground opacity-50 cursor-not-allowed py-1.5'
+            }
+            ${isFocused ? 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground hover:scale-105 rounded-md py-1.5 shadow-md' : ''}
+          `}
+          title={isConfirmed ? (isFocused ? "Remover zoom" : "Ver apenas esta fase") : "Aguardando todos os jogos serem definidos"}
+        >
+          {getPhaseLabel(phase)}
+          {isFocused && <X className="h-3 w-3 ml-1" />}
+        </button>
+
         <div className="flex flex-col flex-1">
           {matches.map(match => (
-            // O flex-1 e justify-center garantem o alinhamento matemático exato do mata-mata
             <div key={match.id} className="flex-1 flex flex-col justify-center">
               <BracketNode match={match} />
             </div>
@@ -520,56 +567,67 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
 
   // RETORNO PRINCIPAL DA ÁRVORE
   return (
-    <div className="w-full">
+    <div className="w-full relative">
+      {/* Botão flutuante de Voltar caso ele se perca no Zoom */}
+      {focusedPhase && (
+        <div className="absolute -top-12 right-0 z-10 animate-in fade-in">
+           <Button variant="outline" size="sm" onClick={() => setFocusedPhase(null)} className="shadow-md bg-background">
+             <X className="h-4 w-4 mr-2" /> Limpar Filtro
+           </Button>
+        </div>
+      )}
+
       <div className="bg-muted/10 border border-dashed rounded-xl overflow-x-auto custom-scrollbar">
-        {/* 👇 AQUI ESTÁ A CHAVE: items-stretch adicionado 👇 */}
-        <div className="flex justify-between items-stretch min-w-max gap-8 px-8 pb-8 pt-4">
+        <div className={`flex items-stretch min-w-max gap-8 px-8 pb-8 pt-4 transition-all duration-500 ${focusedPhase ? 'justify-center' : 'justify-between'}`}>
 
           {/* ESQUERDA */}
           <div className="flex gap-6 items-stretch">
-            <BracketColumn phase="round_32" matches={r32.left} />
-            {showR16 && <BracketColumn phase="round_16" matches={r16.left} />}
-            {showQF && <BracketColumn phase="quarter" matches={qf.left} />}
-            {showSF && <BracketColumn phase="semi" matches={sf.left} />}
+            {isPhaseVisible('round_32') && <BracketColumn phase="round_32" matches={r32.left} isConfirmed={r32Confirmed} />}
+            {showR16 && isPhaseVisible('round_16') && <BracketColumn phase="round_16" matches={r16.left} isConfirmed={r16Confirmed} />}
+            {showQF && isPhaseVisible('quarter') && <BracketColumn phase="quarter" matches={qf.left} isConfirmed={qfConfirmed} />}
+            {showSF && isPhaseVisible('semi') && <BracketColumn phase="semi" matches={sf.left} isConfirmed={sfConfirmed} />}
           </div>
 
           {/* CENTRO (O Troféu) */}
-          <div className="flex flex-col justify-center items-center gap-16 min-w-[260px] px-4 border-x border-border/50">
-            {finalMatch?.home_team || finalMatch?.away_team ? (
-              <div className="flex flex-col items-center gap-3">
-                <span className="font-black text-yellow-600 text-xs uppercase tracking-widest bg-yellow-500/10 border border-yellow-500/30 px-4 py-1.5 rounded-full shadow-sm">
-                  🏆 Grande Final
-                </span>
-                <BracketNode match={finalMatch} />
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-2 opacity-30">
-                <span className="font-bold text-muted-foreground text-xs uppercase">Aguardando Finalistas</span>
-                <div className="w-48 h-20 border-2 border-dashed border-border rounded-lg"></div>
-              </div>
-            )}
+          {isPhaseVisible('final') && (
+            <div className="flex flex-col justify-center items-center gap-16 min-w-[260px] px-4 border-x border-border/50 animate-in fade-in duration-500">
+              {finalMatch?.home_team || finalMatch?.away_team ? (
+                <div className="flex flex-col items-center gap-3">
+                  <span className="font-black text-yellow-600 text-xs uppercase tracking-widest bg-yellow-500/10 border border-yellow-500/30 px-4 py-1.5 rounded-full shadow-sm">
+                    🏆 Grande Final
+                  </span>
+                  <BracketNode match={finalMatch} />
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2 opacity-30">
+                  <span className="font-bold text-muted-foreground text-xs uppercase">Aguardando Finalistas</span>
+                  <div className="w-48 h-20 border-2 border-dashed border-border rounded-lg"></div>
+                </div>
+              )}
 
-            {(thirdPlaceMatch?.home_team || thirdPlaceMatch?.away_team) && (
-              <div className="flex flex-col items-center gap-3 mt-8">
-                <span className="font-bold text-muted-foreground text-[10px] uppercase tracking-widest">
-                  🥉 Disputa do 3º Lugar
-                </span>
-                <BracketNode match={thirdPlaceMatch} />
-              </div>
-            )}
-          </div>
+              {(thirdPlaceMatch?.home_team || thirdPlaceMatch?.away_team) && (
+                <div className="flex flex-col items-center gap-3 mt-8">
+                  <span className="font-bold text-muted-foreground text-[10px] uppercase tracking-widest">
+                    🥉 Disputa do 3º Lugar
+                  </span>
+                  <BracketNode match={thirdPlaceMatch} />
+                </div>
+              )}
+            </div>
+          )}
 
           {/* DIREITA */}
           <div className="flex flex-row-reverse gap-6 items-stretch">
-            <BracketColumn phase="round_32" matches={r32.right} />
-            {showR16 && <BracketColumn phase="round_16" matches={r16.right} />}
-            {showQF && <BracketColumn phase="quarter" matches={qf.right} />}
-            {showSF && <BracketColumn phase="semi" matches={sf.right} />}
+            {isPhaseVisible('round_32') && <BracketColumn phase="round_32" matches={r32.right} isConfirmed={r32Confirmed} />}
+            {showR16 && isPhaseVisible('round_16') && <BracketColumn phase="round_16" matches={r16.right} isConfirmed={r16Confirmed} />}
+            {showQF && isPhaseVisible('quarter') && <BracketColumn phase="quarter" matches={qf.right} isConfirmed={qfConfirmed} />}
+            {showSF && isPhaseVisible('semi') && <BracketColumn phase="semi" matches={sf.right} isConfirmed={sfConfirmed} />}
           </div>
 
         </div>
       </div>
 
+      {/* Modal de Palpite */}
       {selectedMatch && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="relative w-full max-w-lg bg-background rounded-xl shadow-2xl overflow-hidden">
