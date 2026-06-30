@@ -679,14 +679,25 @@ export default function Predictions() {
   useEffect(() => {
     async function syncInternetTime() {
       try {
-        const res = await fetch('https://worldtimeapi.org/api/timezone/Etc/UTC')
+        // Cria um cronômetro de 2 segundos para não travar a tela
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 2000)
+
+        const res = await fetch('https://worldtimeapi.org/api/timezone/Etc/UTC', {
+          signal: controller.signal
+        })
+        
+        clearTimeout(timeoutId) // Cancela o cronômetro se a API responder rápido
+        
         if (!res.ok) throw new Error('API falhou')
         const data = await res.json()
         const internetTime = new Date(data.datetime).getTime()
         const localTime = new Date().getTime()
         setTimeOffset(internetTime - localTime)
       } catch (error) {
-        console.log('API de tempo falhou, usando relógio local como fallback')
+        // Se a API for bloqueada (como acontece no PC do seu amigo) ou demorar mais de 2s:
+        console.warn('API de tempo falhou ou foi bloqueada, usando relógio local como fallback')
+        setTimeOffset(0) // Garante que o offset é zero para a tela continuar carregando
       }
     }
     syncInternetTime()
