@@ -150,26 +150,31 @@ serve(async (req) => {
 
       const dbPhase = PHASE_DICTIONARY[match.stage] || 'group'
 
-      const homeScore = match.score?.fullTime?.home ?? null;
-      const awayScore = match.score?.fullTime?.away ?? null;
-
+      // --- LÓGICA BLINDADA PARA O PLACAR ---
+      // Pega o placar cheio que a API envia
+      let homeScore = match.score?.fullTime?.home ?? null;
+      let awayScore = match.score?.fullTime?.away ?? null;
       let dbPenaltyWinner = null;
-      // A API football-data retorna o status duration como 'PENALTY_SHOOTOUT' 
+
+      // Se o jogo foi para os pênaltis...
       if (match.score?.duration === 'PENALTY_SHOOTOUT') {
         const homePen = match.score?.penalties?.home ?? 0;
         const awayPen = match.score?.penalties?.away ?? 0;
 
-        // Define o vencedor com base na contagem de pênaltis
+        // A MÁGICA: Corrige o placar do tempo normal se a API tiver somado os pênaltis nele.
+        // Se o jogo foi pros pênaltis, obrigatoriamente ele terminou empatado. Se o fullTime
+        // estiver diferente, nós subtraímos os pênaltis para voltar ao empate original.
+        if (homeScore !== null && awayScore !== null && homeScore !== awayScore) {
+          homeScore = homeScore - homePen;
+          awayScore = awayScore - awayPen;
+        }
+
+        // Define quem ganhou os pênaltis
         if (homePen > awayPen) dbPenaltyWinner = 'home';
         else if (awayPen > homePen) dbPenaltyWinner = 'away';
-
-        // Log de debug para conferência
-        console.log(`Debug Pênaltis: ${match.homeTeam.name} (${homePen}) x (${awayPen}) ${match.awayTeam.name} | Vencedor: ${dbPenaltyWinner}`);
-      }
-
-      // IMPORTANTE: Se o jogo terminou mas não houve pênaltis, 
-      // certifique-se de que não estamos carregando um vencedor de pênaltis "fantasma"
-      if (match.status === 'FINISHED' && match.score?.duration !== 'PENALTY_SHOOTOUT') {
+        
+      } else if (match.status === 'FINISHED') {
+        // Garantia de limpeza para jogos decididos no tempo normal
         dbPenaltyWinner = null;
       }
 
@@ -231,10 +236,6 @@ serve(async (req) => {
             status: dbStatus,
             penalty_winner: dbPenaltyWinner
           })
-
-        if (match.id === ID_DO_JOGO_ALEMANHA_PARAGUAI) {
-          console.log("DADOS DA API PARA O JOGO:", JSON.stringify(match.score, null, 2));
-        }
 
         if (!insertError) {
           console.log(`✅ NOVO CONFRONTO INSERIDO: ${match.homeTeam.name} x ${match.awayTeam.name} (${dbPhase})`)

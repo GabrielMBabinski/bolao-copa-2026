@@ -135,9 +135,18 @@ const FriendsPredictionsList = ({
                   <div key={i} className="flex items-center justify-between text-sm bg-background p-2 rounded border border-border/50 shadow-sm">
                     <span className="truncate font-medium pr-2">{p.profiles?.name || 'Anônimo'}</span>
                     <div className="flex items-center gap-2 shrink-0">
-                      <Badge variant="secondary" className="font-bold text-primary">
+                      <Badge variant="secondary" className="font-bold text-primary flex items-center">
+                        {/* Se o palpite foi empate e ele escolheu o mandante ('home'), estrela na esquerda */}
+                        {p.home_score === p.away_score && p.penalty_winner === 'home' && (
+                           <span className="text-yellow-500 mr-1" title={`${homeTeamName || 'Mandante'} vence nos pênaltis`}>★</span>
+                        )}
+                        
                         {p.home_score} x {p.away_score}
-                        {p.home_score === p.away_score && p.penalty_winner && <span className="text-yellow-500 ml-1">*</span>}
+                        
+                        {/* Se o palpite foi empate e ele escolheu o visitante ('away'), estrela na direita */}
+                        {p.home_score === p.away_score && p.penalty_winner === 'away' && (
+                           <span className="text-yellow-500 ml-1" title={`${awayTeamName || 'Visitante'} vence nos pênaltis`}>★</span>
+                        )}
                       </Badge>
                       {isFinished && p.points_earned !== null && p.points_earned !== undefined && (
                         <Badge className={`${p.points_earned > 0 ? "bg-green-600 text-white" : "bg-slate-600 text-white"} ml-1 min-w-[50px] justify-center border-none`}>
