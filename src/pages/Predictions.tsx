@@ -11,11 +11,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Target, Clock, Lock, Check, Users, X, GitMerge } from 'lucide-react'
 import TeamFlag from '@/components/TeamFlag'
 
-// --- FUNÇÕES AUXILIARES (BLINDADAS CONTRA NULL) ---
+// --- FUNÇÕES AUXILIARES (BLINDADAS CONTRA NULL E SAFARI) ---
 const normalizeDate = (dateString: string | null) => {
-  // Se o jogo não tiver data definida na API, jogamos para o futuro para não quebrar a tela
   if (!dateString) return new Date('2099-12-31T00:00:00Z')
 
+  // O conserto do iPhone/Safari ('T') acontece direto aqui na raiz com segurança!
   const formattedString = dateString.replace(' ', 'T')
   const hasTimezone = formattedString.includes('Z') || formattedString.match(/[+-]\d{2}:\d{2}$/)
   const safeDateStr = hasTimezone ? formattedString : `${formattedString}-04:00`
@@ -23,9 +23,7 @@ const normalizeDate = (dateString: string | null) => {
 }
 
 const formatDate = (dateString: string | null) => {
-  // Se não tiver data, exibe um texto amigável
   if (!dateString) return 'A definir'
-
   return normalizeDate(dateString).toLocaleDateString('pt-BR', {
     day: '2-digit', month: '2-digit', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
@@ -41,8 +39,6 @@ const getPhaseLabel = (phase: string) => {
 }
 
 // --- COMPONENTE DE LISTA DE AMIGOS ---
-// --- COMPONENTE DE LISTA DE AMIGOS ---
-// --- COMPONENTE DE LISTA DE AMIGOS ---
 const FriendsPredictionsList = ({
   matchId,
   matchDate,
@@ -51,8 +47,8 @@ const FriendsPredictionsList = ({
   actualHomeScore,
   actualAwayScore,
   actualPenaltyWinner,
-  homeTeamName, // Adicione isto
-  awayTeamName  // Adicione isto
+  homeTeamName,
+  awayTeamName 
 }: {
   matchId: string,
   matchDate: string,
@@ -61,8 +57,8 @@ const FriendsPredictionsList = ({
   actualHomeScore?: number | null,
   actualAwayScore?: number | null,
   actualPenaltyWinner?: string | null,
-  homeTeamName?: string, // Adicione isto
-  awayTeamName?: string  // Adicione isto
+  homeTeamName?: string, 
+  awayTeamName?: string  
 }) => {
   const [show, setShow] = useState(false)
   const [list, setList] = useState<any[]>([])
@@ -105,8 +101,6 @@ const FriendsPredictionsList = ({
 
       {show && (
         <div className="mt-3 bg-muted rounded-lg border border-border/50 overflow-hidden">
-
-          {/* --- NOVO: PLACAR OFICIAL DO JOGO --- */}
           {isFinished && actualHomeScore !== null && actualHomeScore !== undefined && (
             <div className="bg-slate-900/40 p-3 text-center border-b border-border/50 flex flex-col items-center justify-center">
               <span className="text-[10px] text-slate-400 uppercase tracking-wider font-bold mb-1">Resultado Oficial</span>
@@ -114,7 +108,6 @@ const FriendsPredictionsList = ({
                 <Badge variant="outline" className="text-sm font-bold bg-slate-950 px-3 py-1 shadow-inner">
                   {actualHomeScore} x {actualAwayScore}
                 </Badge>
-                {/* Exibe o badge de pênaltis se o jogo terminou empatado e teve vencedor */}
                 {actualPenaltyWinner && (
                   <Badge className="bg-yellow-600 hover:bg-yellow-700 text-white text-[10px] uppercase font-bold border-none">
                     {actualPenaltyWinner === 'home'
@@ -127,7 +120,6 @@ const FriendsPredictionsList = ({
             </div>
           )}
 
-          {/* --- LISTA DE PALPITES COM A BARRA CUSTOMIZADA --- */}
           <div className="p-3 space-y-2 max-h-[40vh] overflow-y-auto custom-scrollbar">
             {loading ? <div className="text-sm text-center animate-pulse py-4">Carregando palpites...</div> :
               list.length === 0 ? <div className="text-sm text-center py-4">Ninguém mais palpitou.</div> :
@@ -136,14 +128,10 @@ const FriendsPredictionsList = ({
                     <span className="truncate font-medium pr-2">{p.profiles?.name || 'Anônimo'}</span>
                     <div className="flex items-center gap-2 shrink-0">
                       <Badge variant="secondary" className="font-bold text-primary flex items-center">
-                        {/* Se o palpite foi empate e ele escolheu o mandante ('home'), estrela na esquerda */}
                         {p.home_score === p.away_score && p.penalty_winner === 'home' && (
                           <span className="text-yellow-500 mr-1" title={`${homeTeamName || 'Mandante'} vence nos pênaltis`}>★</span>
                         )}
-
                         {p.home_score} x {p.away_score}
-
-                        {/* Se o palpite foi empate e ele escolheu o visitante ('away'), estrela na direita */}
                         {p.home_score === p.away_score && p.penalty_winner === 'away' && (
                           <span className="text-yellow-500 ml-1" title={`${awayTeamName || 'Visitante'} vence nos pênaltis`}>★</span>
                         )}
@@ -174,7 +162,6 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', ini
   const isKnockout = match.phase !== 'group'
   const isTie = homeScore !== '' && awayScore !== '' && Number(homeScore) === Number(awayScore)
 
-  // Reset do penaltyWinner se o usuário mudar o placar e não for mais empate
   useEffect(() => {
     if (!isTie) setPenaltyWinner(null)
   }, [homeScore, awayScore, isTie])
@@ -187,7 +174,9 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', ini
       return;
     }
     const now = new Date();
-    const matchDate = new Date(match.match_date);
+    // Usa o normalizeDate limpo que evita crashes com null e ajusta Safari
+    const matchDate = normalizeDate(match.match_date);
+    
     if (now >= matchDate || match.status !== 'pending') {
       alert("O jogo já começou ou foi encerrado!");
       return;
@@ -205,12 +194,11 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', ini
   }
 
   const realCurrentTime = new Date(new Date().getTime() + timeOffset)
-  const isLocked = normalizeDate(match.match_date) <= realCurrentTime || match.status !== 'pending'
-  const isFinished = match.status === 'finished'
-
+  // Corrige a checagem usando normalizeDate diretamente
+  const isLocked = match.match_date ? (normalizeDate(match.match_date) <= realCurrentTime || match.status !== 'pending') : false
+  
   return (
     <div className={`p-4 border rounded-xl flex flex-col gap-6 ${isLocked ? 'opacity-80 bg-muted/10' : 'bg-card shadow-sm'}`}>
-      {/* Cabeçalho */}
       <div className="flex items-center justify-between border-b pb-3">
         <Badge variant={isLocked ? "secondary" : "outline"}>{getPhaseLabel(match.phase)}</Badge>
         <span className="text-xs text-muted-foreground flex items-center gap-1">
@@ -218,7 +206,6 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', ini
         </span>
       </div>
 
-      {/* Times e Placar */}
       <div className="flex flex-col items-center gap-4">
         <div className="flex items-center justify-center gap-6 w-full">
           <div className="flex flex-col items-center gap-2 flex-1">
@@ -232,7 +219,6 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', ini
           </div>
         </div>
 
-        {/* Formulário Ajustado */}
         {!isLocked && match.home_team && match.away_team ? (
           <form onSubmit={handleSubmit} className="w-full max-w-xs flex flex-col gap-4">
             <div className="flex items-center justify-center gap-3">
@@ -241,7 +227,6 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', ini
               <Input type="number" min="0" max="20" required value={awayScore} onChange={(e) => setAwayScore(e.target.value === '' ? '' : parseInt(e.target.value))} className="w-20 h-14 text-center font-black text-2xl" placeholder="0" />
             </div>
 
-            {/* Penalties abaixo do placar */}
             {isKnockout && isTie && (
               <div className="bg-yellow-500/10 border border-yellow-500/20 p-3 rounded-lg text-center space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
                 <p className="text-[11px] font-bold text-yellow-600 uppercase">Classificado nos pênaltis:</p>
@@ -256,7 +241,6 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', ini
               </div>
             )}
 
-            {/* Botão de salvar no final */}
             <Button type="submit" disabled={saving || justSaved} className={`w-full h-12 text-base font-bold ${justSaved ? 'bg-green-600 hover:bg-green-700' : ''}`}>
               {saving ? 'Salvando...' : justSaved ? 'Salvo! ✅' : predictionId ? 'Atualizar Palpite' : 'Confirmar Palpite'}
             </Button>
@@ -271,12 +255,12 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', ini
           matchId={match.id}
           matchDate={match.match_date}
           timeOffset={timeOffset}
-          isFinished={isFinished}
+          isFinished={match.status === 'finished'} // Declarado explicitamente para não quebrar!
           actualHomeScore={match.home_score}
           actualAwayScore={match.away_score}
           actualPenaltyWinner={match.penalty_winner}
-          homeTeamName={match.home_team?.name} // Passe o nome aqui
-          awayTeamName={match.away_team?.name} // Passe o nome aqui
+          homeTeamName={match.home_team?.name} 
+          awayTeamName={match.away_team?.name} 
         />
       )}
     </div>
@@ -303,35 +287,20 @@ const deriveNextPhase = (previousPhaseMatches: any[]) => {
     const matchB = previousPhaseMatches[i + 1];
 
     nextPhase.push({
-      id: `derived-${Math.random().toString(36).substring(7)}`, // Gera um ID único provisório
+      id: `derived-${Math.random().toString(36).substring(7)}`, 
       home_team: matchA ? getAdvancingTeam(matchA) : null,
       away_team: matchB ? getAdvancingTeam(matchB) : null,
       status: 'pending',
-      match_date: null // Como é previsto, não tem data oficial ainda
+      match_date: null 
     });
   }
   return nextPhase;
 };
 
 // --- COMPONENTE: ÁRVORE DO MATA-MATA (ESTILO FIFA) ---
-// --- COMPONENTE: ÁRVORE DO MATA-MATA (ESTILO FIFA) ---
 const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { allMatches: MatchWithTeams[], userPredictions: PredictionWithMatch[], onSave: any, timeOffset: number }) => {
   const [selectedMatch, setSelectedMatch] = useState<{ match: MatchWithTeams, pred: any } | null>(null)
-  
-  // 👇 NOVO ESTADO: Guarda qual fase está com o "Zoom"
   const [focusedPhase, setFocusedPhase] = useState<string | null>(null)
-
-  // 1. O ROTEADOR DE CHAVES
-  const LEFT_BRACKET_TEAMS = [
-    'alemanha', 'paraguai', 'franca', 'suecia',
-    'africa do sul', 'canada', 'holanda', 'marrocos',
-    'espanha', 'estados unidos', 'bosnia e herzegovina', 'belgica'
-  ]
-
-  const normalizeName = (name?: string) => {
-    if (!name) return ""
-    return name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim()
-  }
 
   const getBracketSide = (match: MatchWithTeams) => {
     if (match.phase === 'final' || match.phase === 'third_place') return 'center';
@@ -376,18 +345,14 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
 
   const mergePhase = (derivedMatches: any[], apiMatches: any[]) => {
     if (!apiMatches || apiMatches.length === 0) return derivedMatches;
-
     const usedApiIds = new Set();
-
     return derivedMatches.map(derived => {
-      // Procura o jogo oficial na API cruzando pelo menos 1 dos times (home ou away)
       const official = apiMatches.find(m => {
         if (usedApiIds.has(m.id)) return false;
         const hasHome = derived.home_team && (m.home_team_id === derived.home_team.id || m.away_team_id === derived.home_team.id);
         const hasAway = derived.away_team && (m.home_team_id === derived.away_team.id || m.away_team_id === derived.away_team.id);
         return hasHome || hasAway;
       });
-
       if (official) {
         usedApiIds.add(official.id);
         return official;
@@ -396,44 +361,21 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
     });
   };
 
-  // 👇 2. A ÁRVORE INTELIGENTE ATUALIZADA 👇
-
-  // 16-AVOS (Base oficial da API)
   const r32 = splitMatches(getPhaseMatches('round_32'))
-
-  // OITAVAS
   const apiR16 = splitMatches(getPhaseMatches('round_16'))
-  const r16 = {
-    left: mergePhase(deriveNextPhase(r32.left), apiR16.left),
-    right: mergePhase(deriveNextPhase(r32.right), apiR16.right)
-  }
-
-  // QUARTAS
+  const r16 = { left: mergePhase(deriveNextPhase(r32.left), apiR16.left), right: mergePhase(deriveNextPhase(r32.right), apiR16.right) }
   const apiQf = splitMatches(getPhaseMatches('quarter'))
-  const qf = {
-    left: mergePhase(deriveNextPhase(r16.left), apiQf.left),
-    right: mergePhase(deriveNextPhase(r16.right), apiQf.right)
-  }
-
-  // SEMIFINAIS
+  const qf = { left: mergePhase(deriveNextPhase(r16.left), apiQf.left), right: mergePhase(deriveNextPhase(r16.right), apiQf.right) }
   const apiSf = splitMatches(getPhaseMatches('semi'))
-  const sf = {
-    left: mergePhase(deriveNextPhase(qf.left), apiSf.left),
-    right: mergePhase(deriveNextPhase(qf.right), apiSf.right)
-  }
-
-  // Finais...
+  const sf = { left: mergePhase(deriveNextPhase(qf.left), apiSf.left), right: mergePhase(deriveNextPhase(qf.right), apiSf.right) }
   const finalMatch = getPhaseMatches('final')[0]
   const thirdPlaceMatch = getPhaseMatches('third_place')[0]
 
-  // LÓGICA DE VISIBILIDADE
   const hasKnownTeam = (matches: any[]) => matches.some(m => m.home_team || m.away_team)
-
   const showR16 = hasKnownTeam(r16.left) || hasKnownTeam(r16.right)
   const showQF = hasKnownTeam(qf.left) || hasKnownTeam(qf.right)
   const showSF = hasKnownTeam(sf.left) || hasKnownTeam(sf.right)
 
-  //Verifica se TODOS os jogos da fase já vieram da API (ID não começa com 'derived-')
   const isPhaseConfirmed = (left: MatchWithTeams[], right: MatchWithTeams[]) => {
     const all = [...left, ...right];
     if (all.length === 0) return false;
@@ -448,33 +390,24 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
   const phaseLevels: Record<string, number> = { round_32: 0, round_16: 1, quarter: 2, semi: 3, final: 4 };
 
   const isPhaseVisible = (phase: string) => {
-    // Se não tem filtro, mostra tudo
     if (!focusedPhase) return true;
-    // Regra especial pros 16-avos: se clicar nele, mostra só ele (como você pediu)
     if (focusedPhase === 'round_32') return phase === 'round_32';
-    // Para as outras fases: mostra a fase clicada e todas as que vêm DEPOIS dela
     return phaseLevels[phase] >= phaseLevels[focusedPhase];
   };
 
   const BracketNode = ({ match }: { match: MatchWithTeams }) => {
     const pred: any = userPredictions.find(p => p.match_id === match.id)
     const realCurrentTime = new Date(new Date().getTime() + timeOffset)
+    // Limpamos o duplicate replace aqui
     const isLocked = match.match_date ? (normalizeDate(match.match_date) <= realCurrentTime || match.status !== 'pending') : false
-
-    const homeTeamName = match.home_team?.name || 'A Def.'
-    const awayTeamName = match.away_team?.name || 'A Def.'
-    
     const isReady = match.home_team && match.away_team
     const isOfficial = match.id && !match.id.toString().startsWith('derived-')
     const canClick = isReady && isOfficial
 
-    // 👇 NOVA LÓGICA: Decide se vai mostrar o placar Real ou o Palpite
     const isRealScore = match.home_score !== null && match.home_score !== undefined;
-    
     const displayHomeScore = isRealScore ? match.home_score : (pred?.home_score ?? '-');
     const displayAwayScore = isRealScore ? match.away_score : (pred?.away_score ?? '-');
-    
-    // A estrela também acompanha: mostra a real se o jogo acabou, ou a do palpite se ainda não
+
     const isHomePenalty = isRealScore ? match.penalty_winner === 'home' : (pred?.home_score === pred?.away_score && pred?.penalty_winner === 'home');
     const isAwayPenalty = isRealScore ? match.penalty_winner === 'away' : (pred?.home_score === pred?.away_score && pred?.penalty_winner === 'away');
 
@@ -482,37 +415,34 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
       <div
         onClick={() => { if (canClick) setSelectedMatch({ match, pred }) }}
         className={`relative flex flex-col p-2 w-48 border rounded-lg shadow-sm transition-all
-            ${!isOfficial || !isReady 
-              ? 'bg-muted/10 opacity-50 cursor-default' 
-              : isLocked 
-                ? 'bg-muted/30 border-border/50 cursor-pointer hover:border-primary/50' 
-                : 'bg-card cursor-pointer hover:border-primary hover:shadow-md hover:scale-105'
-            }
+            ${!isOfficial || !isReady
+            ? 'bg-muted/10 opacity-50 cursor-default'
+            : isLocked
+              ? 'bg-muted/30 border-border/50 cursor-pointer hover:border-primary/50'
+              : 'bg-card cursor-pointer hover:border-primary hover:shadow-md hover:scale-105'
+          }
           `}
       >
         <div className="text-[10px] text-muted-foreground mb-1 text-center border-b pb-1">
           {match.match_date ? formatDate(match.match_date).replace(',', ' -') : 'Aguardando Oficialização'}
         </div>
-
         <div className="flex items-center justify-between py-1">
           <div className="flex items-center gap-2 overflow-hidden">
             {match.home_team?.flag_code ? <TeamFlag flagCode={match.home_team.flag_code} /> : <div className="w-5 h-4 bg-muted rounded"></div>}
             <span className="text-xs font-medium truncate">
-              {homeTeamName}
+              {match.home_team?.name || 'A Def.'}
               {isHomePenalty && <span className="text-yellow-500 ml-1 font-black" title="Vence nos Pênaltis">★</span>}
             </span>
           </div>
-          {/* O background muda de cor se for o resultado oficial ou apenas o palpite */}
           <span className={`text-xs font-bold w-6 text-center rounded ${isRealScore ? 'bg-slate-700 text-white' : (pred ? 'bg-primary/20 text-primary' : 'bg-muted')}`}>
             {displayHomeScore}
           </span>
         </div>
-
         <div className="flex items-center justify-between py-1">
           <div className="flex items-center gap-2 overflow-hidden">
             {match.away_team?.flag_code ? <TeamFlag flagCode={match.away_team.flag_code} /> : <div className="w-5 h-4 bg-muted rounded"></div>}
             <span className="text-xs font-medium truncate">
-              {awayTeamName}
+              {match.away_team?.name || 'A Def.'}
               {isAwayPenalty && <span className="text-yellow-500 ml-1 font-black" title="Vence nos Pênaltis">★</span>}
             </span>
           </div>
@@ -520,7 +450,6 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
             {displayAwayScore}
           </span>
         </div>
-
         {match.status === 'finished' && pred && (
           <div className={`absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm ${pred.points_earned > 0 ? 'bg-green-500' : 'bg-gray-400'}`}>
             {pred.points_earned}
@@ -532,18 +461,15 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
 
   const BracketColumn = ({ phase, matches, isConfirmed }: { phase: string, matches: MatchWithTeams[], isConfirmed: boolean }) => {
     if (!matches || matches.length === 0) return null
-    
-    // Verifica se esta é a coluna que está em zoom no momento
     const isFocused = focusedPhase === phase;
-
     return (
       <div className="flex flex-col min-w-[12rem] py-4 transition-all duration-500 animate-in fade-in">
         <button
           onClick={() => isConfirmed && setFocusedPhase(isFocused ? null : phase)}
           disabled={!isConfirmed}
           className={`font-bold text-center text-[11px] uppercase tracking-wider mb-4 shrink-0 flex items-center justify-center gap-1 mx-auto w-full max-w-[160px] transition-all duration-300
-            ${isConfirmed 
-              ? 'text-primary cursor-pointer hover:bg-primary/10 py-1.5 rounded-md border border-transparent hover:border-primary/20' 
+            ${isConfirmed
+              ? 'text-primary cursor-pointer hover:bg-primary/10 py-1.5 rounded-md border border-transparent hover:border-primary/20'
               : 'text-muted-foreground opacity-50 cursor-not-allowed py-1.5'
             }
             ${isFocused ? 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground hover:scale-105 rounded-md py-1.5 shadow-md' : ''}
@@ -553,7 +479,6 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
           {getPhaseLabel(phase)}
           {isFocused && <X className="h-3 w-3 ml-1" />}
         </button>
-
         <div className="flex flex-col flex-1">
           {matches.map(match => (
             <div key={match.id} className="flex-1 flex flex-col justify-center">
@@ -565,30 +490,24 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
     )
   }
 
-  // RETORNO PRINCIPAL DA ÁRVORE
   return (
     <div className="w-full relative">
-      {/* Botão flutuante de Voltar caso ele se perca no Zoom */}
       {focusedPhase && (
         <div className="absolute -top-12 right-0 z-10 animate-in fade-in">
-           <Button variant="outline" size="sm" onClick={() => setFocusedPhase(null)} className="shadow-md bg-background">
-             <X className="h-4 w-4 mr-2" /> Limpar Filtro
-           </Button>
+          <Button variant="outline" size="sm" onClick={() => setFocusedPhase(null)} className="shadow-md bg-background">
+            <X className="h-4 w-4 mr-2" /> Limpar Filtro
+          </Button>
         </div>
       )}
 
       <div className="bg-muted/10 border border-dashed rounded-xl overflow-x-auto custom-scrollbar">
         <div className={`flex items-stretch min-w-max gap-8 px-8 pb-8 pt-4 transition-all duration-500 ${focusedPhase ? 'justify-center' : 'justify-between'}`}>
-
-          {/* ESQUERDA */}
           <div className="flex gap-6 items-stretch">
             {isPhaseVisible('round_32') && <BracketColumn phase="round_32" matches={r32.left} isConfirmed={r32Confirmed} />}
             {showR16 && isPhaseVisible('round_16') && <BracketColumn phase="round_16" matches={r16.left} isConfirmed={r16Confirmed} />}
             {showQF && isPhaseVisible('quarter') && <BracketColumn phase="quarter" matches={qf.left} isConfirmed={qfConfirmed} />}
             {showSF && isPhaseVisible('semi') && <BracketColumn phase="semi" matches={sf.left} isConfirmed={sfConfirmed} />}
           </div>
-
-          {/* CENTRO (O Troféu) */}
           {isPhaseVisible('final') && (
             <div className="flex flex-col justify-center items-center gap-16 min-w-[260px] px-4 border-x border-border/50 animate-in fade-in duration-500">
               {finalMatch?.home_team || finalMatch?.away_team ? (
@@ -604,7 +523,6 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
                   <div className="w-48 h-20 border-2 border-dashed border-border rounded-lg"></div>
                 </div>
               )}
-
               {(thirdPlaceMatch?.home_team || thirdPlaceMatch?.away_team) && (
                 <div className="flex flex-col items-center gap-3 mt-8">
                   <span className="font-bold text-muted-foreground text-[10px] uppercase tracking-widest">
@@ -615,19 +533,15 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
               )}
             </div>
           )}
-
-          {/* DIREITA */}
           <div className="flex flex-row-reverse gap-6 items-stretch">
             {isPhaseVisible('round_32') && <BracketColumn phase="round_32" matches={r32.right} isConfirmed={r32Confirmed} />}
             {showR16 && isPhaseVisible('round_16') && <BracketColumn phase="round_16" matches={r16.right} isConfirmed={r16Confirmed} />}
             {showQF && isPhaseVisible('quarter') && <BracketColumn phase="quarter" matches={qf.right} isConfirmed={qfConfirmed} />}
             {showSF && isPhaseVisible('semi') && <BracketColumn phase="semi" matches={sf.right} isConfirmed={sfConfirmed} />}
           </div>
-
         </div>
       </div>
 
-      {/* Modal de Palpite */}
       {selectedMatch && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="relative w-full max-w-lg bg-background rounded-xl shadow-2xl overflow-hidden">
@@ -656,8 +570,6 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
   )
 }
 
-
-// --- FUNÇÃO QUE BUSCA TUDO DE UMA VEZ ---
 const fetchPredictionsData = async (userId: string) => {
   if (!userId) return { preds: [], all: [] }
   const [predsRes, matchesRes] = await Promise.all([
@@ -679,25 +591,18 @@ export default function Predictions() {
   useEffect(() => {
     async function syncInternetTime() {
       try {
-        // Cria um cronômetro de 2 segundos para não travar a tela
         const controller = new AbortController()
         const timeoutId = setTimeout(() => controller.abort(), 2000)
-
-        const res = await fetch('https://worldtimeapi.org/api/timezone/Etc/UTC', {
-          signal: controller.signal
-        })
-        
-        clearTimeout(timeoutId) // Cancela o cronômetro se a API responder rápido
-        
+        const res = await fetch('https://worldtimeapi.org/api/timezone/Etc/UTC', { signal: controller.signal })
+        clearTimeout(timeoutId) 
         if (!res.ok) throw new Error('API falhou')
         const data = await res.json()
         const internetTime = new Date(data.datetime).getTime()
         const localTime = new Date().getTime()
         setTimeOffset(internetTime - localTime)
       } catch (error) {
-        // Se a API for bloqueada (como acontece no PC do seu amigo) ou demorar mais de 2s:
         console.warn('API de tempo falhou ou foi bloqueada, usando relógio local como fallback')
-        setTimeOffset(0) // Garante que o offset é zero para a tela continuar carregando
+        setTimeOffset(0) 
       }
     }
     syncInternetTime()
@@ -706,15 +611,11 @@ export default function Predictions() {
   const { data, isLoading } = useSWR(
     user ? ['predictions-data', user.id] : null,
     ([key, userId]) => fetchPredictionsData(userId as string),
-    {
-      dedupingInterval: 30000,
-      revalidateOnFocus: false
-    }
+    { dedupingInterval: 30000, revalidateOnFocus: false }
   )
 
   const userPredictions = data?.preds || []
   const allMatches = data?.all || []
-
   const predictedIds = new Set(userPredictions.map((p: any) => p.match_id))
   const availableMatches = allMatches.filter((m: any) => !predictedIds.has(m.id) && m.status === 'pending' && m.phase === 'group')
 
@@ -723,31 +624,21 @@ export default function Predictions() {
     const realTime = new Date(new Date().getTime() + timeOffset)
     const isKnockoutDate = realTime > new Date('2026-06-27T23:59:59-04:00')
     const hasKnockoutMatches = allMatches.some((m: any) => m.phase !== 'group' && m.home_team_id)
-
-    if (isKnockoutDate || hasKnockoutMatches) {
-      setActiveTab('bracket')
-    }
+    if (isKnockoutDate || hasKnockoutMatches) setActiveTab('bracket')
   }, [allMatches, timeOffset])
 
-
-  // A função de salvar agora aceita o penaltyWinner
   const savePrediction = async (matchId: string, home: number, away: number, penaltyWinner: 'home' | 'away' | null, predictionId?: string) => {
     if (!user) return
     try {
       const payload: any = {
-        user_id: user.id,
-        match_id: matchId,
-        home_score: home,
-        away_score: away,
+        user_id: user.id, match_id: matchId,
+        home_score: home, away_score: away,
         penalty_winner: penaltyWinner
       }
       if (predictionId) payload.id = predictionId
-
       const { error } = await predictions.upsertPrediction(payload)
       if (error) throw error
-
       mutate(['predictions-data', user.id])
-
     } catch (error) {
       console.error(error)
       alert('Erro ao salvar palpite. Verifique a conexão.')
@@ -769,8 +660,7 @@ export default function Predictions() {
           <TabsTrigger value="available">Fase de Grupos ({availableMatches.length})</TabsTrigger>
           <TabsTrigger value="my-predictions">Meus Palpites</TabsTrigger>
           <TabsTrigger value="bracket" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold">
-            <GitMerge className="w-4 h-4 mr-2" />
-            Mata-Mata
+            <GitMerge className="w-4 h-4 mr-2" /> Mata-Mata
           </TabsTrigger>
         </TabsList>
 
@@ -781,7 +671,6 @@ export default function Predictions() {
               <p>Nenhuma partida de grupos pendente</p>
             </Card>
           ) : (
-            // Repassando savePrediction sem alterações visuais aqui (pois é Fase de Grupos)
             availableMatches.map((match) => <PredictionForm key={match.id} match={match} onSave={savePrediction} timeOffset={timeOffset} />)
           )}
         </TabsContent>
@@ -797,7 +686,9 @@ export default function Predictions() {
               .filter((p: any) => p.match.phase === 'group')
               .map((pred: any) => {
                 const realCurrentTime = new Date(new Date().getTime() + timeOffset)
-                const isLocked = normalizeDate(pred.match.match_date) <= realCurrentTime || pred.match.status !== 'pending'
+                
+                // Variáveis corretamente puxadas do 'pred.match' para não quebrar a aba!
+                const isLocked = pred.match.match_date ? (normalizeDate(pred.match.match_date) <= realCurrentTime || pred.match.status !== 'pending') : false
                 const isFinished = pred.match.status === 'finished'
 
                 if (!isLocked) {
