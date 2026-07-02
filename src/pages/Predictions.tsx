@@ -15,16 +15,30 @@ import TeamFlag from '@/components/TeamFlag'
 const normalizeDate = (dateString: string | null) => {
   if (!dateString) return new Date('2099-12-31T00:00:00Z')
 
-  // O conserto do iPhone/Safari ('T') acontece direto aqui na raiz com segurança!
-  const formattedString = dateString.replace(' ', 'T')
-  const hasTimezone = formattedString.includes('Z') || formattedString.match(/[+-]\d{2}:\d{2}$/)
-  const safeDateStr = hasTimezone ? formattedString : `${formattedString}-04:00`
-  return new Date(safeDateStr)
+  // Troca espaço por T
+  let safe = dateString.replace(' ', 'T')
+  
+  // O Safari entra em pânico se o fuso horário for "+00" ou "-04" incompleto.
+  // Ele exige os minutos (ex: "+00:00"). Essa expressão (Regex) conserta isso automaticamente.
+  if (/(?:\+|-)\d{2}$/.test(safe)) {
+    safe += ':00'
+  }
+
+  const hasTimezone = safe.includes('Z') || safe.match(/[+-]\d{2}:\d{2}$/)
+  if (!hasTimezone) safe += '-04:00'
+  
+  return new Date(safe)
 }
 
 const formatDate = (dateString: string | null) => {
   if (!dateString) return 'A definir'
+  
+  // O Segredo está aqui: Como a sua divisão da árvore foi montada usando os 
+  // horários de Cuiabá (-04:00), nós FORÇAMOS esse timeZone na geração do texto.
+  // Isso garante que até quem acessar do Japão vai processar o texto "16:30" 
+  // e encaixar o card na chave da esquerda corretamente!
   return normalizeDate(dateString).toLocaleDateString('pt-BR', {
+    timeZone: 'America/Cuiaba',
     day: '2-digit', month: '2-digit', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
   })
