@@ -589,23 +589,25 @@ export default function Predictions() {
   const [activeTab, setActiveTab] = useState<string>('available')
 
   useEffect(() => {
-    async function syncInternetTime() {
+    async function syncServerTime() {
       try {
-        const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 2000)
-        const res = await fetch('https://worldtimeapi.org/api/timezone/Etc/UTC', { signal: controller.signal })
-        clearTimeout(timeoutId) 
-        if (!res.ok) throw new Error('API falhou')
-        const data = await res.json()
-        const internetTime = new Date(data.datetime).getTime()
+        // Chama a função que criamos no Supabase
+        const { data, error } = await supabase.rpc('get_server_time')
+        
+        if (error) throw error
+        
+        // Converte a data do servidor e a data local para calcular o Offset
+        const serverTime = new Date(data).getTime()
         const localTime = new Date().getTime()
-        setTimeOffset(internetTime - localTime)
+        
+        // Define a diferença de tempo perfeitamente
+        setTimeOffset(serverTime - localTime)
       } catch (error) {
-        console.warn('API de tempo falhou ou foi bloqueada, usando relógio local como fallback')
-        setTimeOffset(0) 
+        console.error('Erro ao sincronizar relógio com o servidor:', error)
+        setTimeOffset(0) // Fallback seguro para não travar a tela
       }
     }
-    syncInternetTime()
+    syncServerTime()
   }, [])
 
   const { data, isLoading } = useSWR(
