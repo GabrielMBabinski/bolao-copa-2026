@@ -12,14 +12,11 @@ import { Target, Clock, Lock, Check, Users, X, GitMerge } from 'lucide-react'
 import TeamFlag from '@/components/TeamFlag'
 
 // --- FUNÇÕES AUXILIARES (BLINDADAS CONTRA NULL E SAFARI) ---
+// --- FUNÇÕES AUXILIARES (BLINDADAS) ---
 const normalizeDate = (dateString: string | null) => {
   if (!dateString) return new Date('2099-12-31T00:00:00Z')
 
-  // Troca espaço por T
   let safe = dateString.replace(' ', 'T')
-  
-  // O Safari entra em pânico se o fuso horário for "+00" ou "-04" incompleto.
-  // Ele exige os minutos (ex: "+00:00"). Essa expressão (Regex) conserta isso automaticamente.
   if (/(?:\+|-)\d{2}$/.test(safe)) {
     safe += ':00'
   }
@@ -30,13 +27,19 @@ const normalizeDate = (dateString: string | null) => {
   return new Date(safe)
 }
 
-const formatDate = (dateString: string | null) => {
+// 1. DATA VISUAL: Usa o fuso horário real da pessoa (Para mostrar na tela)
+const formatDisplayDate = (dateString: string | null) => {
   if (!dateString) return 'A definir'
-  
-  // O Segredo está aqui: Como a sua divisão da árvore foi montada usando os 
-  // horários de Cuiabá (-04:00), nós FORÇAMOS esse timeZone na geração do texto.
-  // Isso garante que até quem acessar do Japão vai processar o texto "16:30" 
-  // e encaixar o card na chave da esquerda corretamente!
+  return normalizeDate(dateString).toLocaleDateString('pt-BR', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+    // Não passamos o "timeZone" aqui! Assim o navegador usa o fuso da pessoa automaticamente.
+  })
+}
+
+// 2. DATA LÓGICA: Força Cuiabá apenas para o código não se perder na hora de dividir a árvore
+const formatLogicDate = (dateString: string | null) => {
+  if (!dateString) return 'A definir'
   return normalizeDate(dateString).toLocaleDateString('pt-BR', {
     timeZone: 'America/Cuiaba',
     day: '2-digit', month: '2-digit', year: 'numeric',
@@ -216,7 +219,7 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', ini
       <div className="flex items-center justify-between border-b pb-3">
         <Badge variant={isLocked ? "secondary" : "outline"}>{getPhaseLabel(match.phase)}</Badge>
         <span className="text-xs text-muted-foreground flex items-center gap-1">
-          <Clock className="h-3 w-3" /> {formatDate(match.match_date)}
+          <Clock className="h-3 w-3" /> {formatDisplayDate(match.match_date)}
         </span>
       </div>
 
@@ -320,7 +323,8 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
     if (match.phase === 'final' || match.phase === 'third_place') return 'center';
     if (!match.match_date) return 'right';
 
-    const dateStr = formatDate(match.match_date);
+    // AQUI: Usa a data fixa de Cuiabá para separar os lados perfeitamente
+    const dateStr = formatLogicDate(match.match_date);
     const leftBracketSchedule = [
       "28/06/2026", "29/06/2026|16:30", "29/06/2026|21:00", "30/06/2026|17:00",
       "01/07/2026|16:00", "01/07/2026|20:00", "02/07/2026|15:00", "02/07/2026|19:00",
@@ -438,7 +442,7 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
           `}
       >
         <div className="text-[10px] text-muted-foreground mb-1 text-center border-b pb-1">
-          {match.match_date ? formatDate(match.match_date).replace(',', ' -') : 'Aguardando Oficialização'}
+          {match.match_date ? formatDisplayDate(match.match_date).replace(',', ' -') : 'Aguardando Oficialização'}
         </div>
         <div className="flex items-center justify-between py-1">
           <div className="flex items-center gap-2 overflow-hidden">
@@ -723,7 +727,7 @@ export default function Predictions() {
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b pb-3">
                       <Badge variant="secondary">{getPhaseLabel(pred.match.phase)}</Badge>
                       <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                        <Lock className="h-4 w-4" /> {formatDate(pred.match.match_date)}
+                        <Lock className="h-4 w-4" /> {formatDisplayDate(pred.match.match_date)}
                       </div>
                     </div>
 
