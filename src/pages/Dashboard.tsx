@@ -80,32 +80,24 @@ export default function Dashboard() {
 
     // 1. Busca os palpites finalizados do próprio usuário
     const { data, error } = await supabase
-  .from('predictions')
-  .select(`
-    points_earned, home_score, away_score, penalty_winner, // Adicione aqui
-    match:matches(
-      home_score, away_score, match_date,
-      home_team:teams!matches_home_team_id_fkey(name),
-      away_team:teams!matches_away_team_id_fkey(name)
-    )
-  `)
-  .eq('user_id', profile.id)
-  .eq('match.status', 'finished')
-
-// 2. Garanta que o uso no forEach está pegando o valor correto
-data.forEach((pred: any) => {
-  // ...
-  const userScore = `'${pred.home_score} x ${pred.away_score}`
-  
-  // Agora pred.penalty_winner deve estar preenchido se o usuário apostou
-  const penaltyInfo = pred.penalty_winner ? ` (Pênaltis: ${pred.penalty_winner})` : ""
+      .from('predictions')
+      .select(`
+        points_earned, home_score, away_score, penalty_winner,
+        match:matches(
+          home_score, away_score, match_date,
+          home_team:teams!matches_home_team_id_fkey(name),
+          away_team:teams!matches_away_team_id_fkey(name)
+        )
+      `)
+      .eq('user_id', profile.id)
+      .eq('match.status', 'finished')
 
     if (error || !data) {
       alert('Erro ao gerar relatório.')
       return
     }
 
-    // --- CÁLCULO DAS ESTATÍSTICAS (O resumo que você pediu) ---
+    // --- CÁLCULO DAS ESTATÍSTICAS ---
     const stats = {
       all: data.length,
       exact: data.filter(p => p.points_earned === 5).length,
@@ -125,21 +117,18 @@ data.forEach((pred: any) => {
       const officialScore = `'${pred.match.home_score} x ${pred.match.away_score}`
       const userScore = `'${pred.home_score} x ${pred.away_score}`
       
-      // NOVA LÓGICA: Verifica se houve pênaltis no palpite
-      const penaltyInfo = pred.penalty_winner ? ` (Pênaltis: ${pred.penalty_winner})` : ""
+      // Lógica de Pênaltis
+      const pWinner = pred.penalty_winner;
+      const penaltyName = pWinner === 'home' ? pred.match.home_team.name : pWinner === 'away' ? pred.match.away_team.name : null;
+      const penaltyInfo = penaltyName ? ` (Pênaltis: ${penaltyName})` : ""
       
       csvContent += `"${date}","${matchStr}",${officialScore},${userScore}${penaltyInfo},${pred.points_earned}\n`
     })
 
     // 3. Adiciona o Resumo no final do arquivo
-    csvContent += `\n"RESUMO DE DESEMPENHO"\n`
-    csvContent += `"Placar Exato (5 pts)",${stats.exact}\n`
-    csvContent += `"Saldo/Empate (3 pts)",${stats.saldo}\n`
-    csvContent += `"Vencedor (1 pt)",${stats.vencedor}\n`
-    csvContent += `"Erros (0 pts)",${stats.erros}\n`
-    csvContent += `"Total de Palpites",${stats.all}\n`
+    csvContent += `\n"RESUMO DE DESEMPENHO"\n"Placar Exato (5 pts)",${stats.exact}\n"Saldo/Empate (3 pts)",${stats.saldo}\n"Vencedor (1 pt)",${stats.vencedor}\n"Erros (0 pts)",${stats.erros}\n"Total de Palpites",${stats.all}\n`
 
-    // 4. Download e "Rasgar o ticket" (deleta a liberação)
+    // 4. Download
     const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
@@ -149,7 +138,7 @@ data.forEach((pred: any) => {
     link.click()
     document.body.removeChild(link)
 
-    // Deleta o pedido para exigir nova autorização no futuro
+    // 5. Deleta o pedido (Ticket de uso único)
     await supabase.from('support_requests').delete().eq('user_id', profile.id)
     setRequestStatus('idle')
   }

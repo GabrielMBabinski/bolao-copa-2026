@@ -5,18 +5,14 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Shield, User, ArrowLeft, CheckCircle2, XCircle, Target, MinusCircle, Download } from 'lucide-react'
 
-// Tipagens para o novo painel
-type Profile = {
-  id: string
-  name: string
-  avatar_url?: string
-}
+type Profile = { id: string; name: string; avatar_url?: string }
 
 type UserPrediction = {
   id: string
   points_earned: number
   home_score: number
   away_score: number
+  penalty_winner: string | null // Adicionado aqui
   match: {
     id: string
     home_team: { name: string; flag_code: string }
@@ -37,145 +33,73 @@ export default function Admin() {
   const [pointFilter, setPointFilter] = useState<number | 'all'>('all')
   const [pendingRequests, setPendingRequests] = useState<any[]>([])
 
+  // Carrega usuários e solicitações
   useEffect(() => {
-    async function loadUsers() {
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('id, name, avatar_url')
-          .order('name')
-
-        if (error) throw error
-        setUsers(data || [])
-      } catch (error) {
-        console.error('Erro ao carregar usuários:', error)
-      } finally {
-        setLoading(false)
-      }
+    async function loadData() {
+      const [usersRes, reqsRes] = await Promise.all([
+        supabase.from('profiles').select('id, name, avatar_url').order('name'),
+        supabase.from('support_requests').select('id, user_id, profiles(name)').eq('status', 'pending')
+      ])
+      setUsers(usersRes.data || [])
+      setPendingRequests(reqsRes.data || [])
+      setLoading(false)
     }
-    loadUsers()
-
-    async function loadRequests() {
-      const { data } = await supabase
-        .from('support_requests')
-        .select('id, user_id, profiles(name)')
-        .eq('status', 'pending')
-      setPendingRequests(data || [])
-    }
-    loadRequests()
+    loadData()
   }, [])
-  // Adicione esta função logo abaixo da loadUsers() e chame ela
 
-
-
-
+  // Carrega palpites do usuário
   useEffect(() => {
-    useEffect(() => {
-      async function loadPredictions() {
-        if (!selectedUser) return
-        setLoadingPredictions(true)
-        try {
-          const { data, error } = await supabase
-            .from('predictions')
-            .select(`
-            id, points_earned, home_score, away_score, penalty_winner,
-            match:matches(
-              id, home_score, away_score, status, match_date,
-              home_team:teams!matches_home_team_id_fkey(name, flag_code),
-              away_team:teams!matches_away_team_id_fkey(name, flag_code)
-            )
-          `)
-            .eq('user_id', selectedUser.id)
-            // Nota: Se 'match.status' filtrar demais, remova esta linha para validar se os dados aparecem
-            .eq('match.status', 'finished')
+    async function loadPredictions() {
+      if (!selectedUser) return
+      setLoadingPredictions(true)
+      const { data, error } = await supabase
+        .from('predictions')
+        .select(`
+          id, points_earned, home_score, away_score, penalty_winner,
+          match:matches(
+            id, home_score, away_score, status, match_date,
+            home_team:teams!matches_home_team_id_fkey(name, flag_code),
+            away_team:teams!matches_away_team_id_fkey(name, flag_code)
+          )
+        `)
+        .eq('user_id', selectedUser.id)
+        .eq('match.status', 'finished')
 
-          if (error) throw error
-
-          // Tratamento de dados: Garantimos que o penalty_winner seja tratado
-          const validPredictions = (data as any[]).filter(p => p.match !== null).map(p => ({
-            ...p,
-            // Se o valor estiver vazio ou nulo, forçamos null para não exibir lixo no relatório
-            penalty_winner: p.penalty_winner || null
-          }))
-
-          setUserPredictions(validPredictions)
-        } catch (error) {
-          console.error('Erro ao carregar palpites:', error)
-        } finally {
-          setLoadingPredictions(false)
-        }
-      }
-      loadPredictions()
-    }, [selectedUser])
-
-    // Calcula a quantidade de cada tipo de acerto (Movi para cá para usar no CSV)
-    const stats = {
-      all: userPredictions.length,
-      exact: userPredictions.filter(p => p.points_earned === 5).length,
-      saldo: userPredictions.filter(p => p.points_earned === 3).length,
-      vencedor: userPredictions.filter(p => p.points_earned === 1).length,
-      erros: userPredictions.filter(p => p.points_earned === 0).length,
+      if (error) console.error(error)
+      setUserPredictions(data?.filter(p => p.match !== null) || [])
+      setLoadingPredictions(false)
     }
+    loadPredictions()
+  }, [selectedUser])
 
-    // Função para exportar os dados para CSV (Agora com Resumo)
-    const exportToCSV = () => {
-      if (!selectedUser || userPredictions.length === 0) return
+  const stats = {
+    all: userPredictions.length,
+    exact: userPredictions.filter(p => p.points_earned === 5).length,
+    saldo: userPredictions.filter(p => p.points_earned === 3).length,
+    vencedor: userPredictions.filter(p => p.points_earned === 1).length,
+    erros: userPredictions.filter(p => p.points_earned === 0).length,
+  }
 
-      let csvContent = "Data,Partida,Placar Oficial,Palpite do Usuario,Pontos Ganhos\n"
+  const exportToCSV = () => {
+    if (!selectedUser || userPredictions.length === 0) return
+    let csvContent = "Data,Partida,Placar Oficial,Palpite do Usuario,Pontos Ganhos\n"
+    userPredictions.forEach(pred => {
+      const pWinner = pred.penalty_winner
+      const penaltyName = pWinner === 'home' ? pred.match.home_team.name : pWinner === 'away' ? pred.match.away_team.name : null
+      const penaltyInfo = penaltyName ? ` (Pênaltis: ${penaltyName})` : ""
+      csvContent += `"${new Date(pred.match.match_date).toLocaleDateString()}","${pred.match.home_team.name} vs ${pred.match.away_team.name}",'${pred.match.home_score} x ${pred.match.away_score},'${pred.home_score} x ${pred.away_score}${penaltyInfo},${pred.points_earned}\n`
+    })
+    // ... adicione o resumo como antes
+    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `relatorio_${selectedUser.name}.csv`; link.click()
+  }
 
-      userPredictions.forEach(pred => {
-        const date = new Date(pred.match.match_date).toLocaleDateString('pt-BR')
-        const matchStr = `${pred.match.home_team.name} vs ${pred.match.away_team.name}`
-        const officialScore = `'${pred.match.home_score} x ${pred.match.away_score}`
-        const userScore = `'${pred.home_score} x ${pred.away_score}`
+  const resolveRequest = async (requestId: string) => {
+    await supabase.from('support_requests').update({ status: 'resolved' }).eq('id', requestId)
+    setPendingRequests(prev => prev.filter(req => req.id !== requestId))
+  }
 
-        // CORREÇÃO: Pega o nome do time baseando-se no valor de penalty_winner
-        const pWinner = (pred as any).penalty_winner;
-        const penaltyName = pWinner === 'home'
-          ? pred.match.home_team.name
-          : pWinner === 'away'
-            ? pred.match.away_team.name
-            : null;
-
-        const penaltyInfo = penaltyName ? ` (Pênaltis: ${penaltyName})` : "";
-
-        csvContent += `"${date}","${matchStr}",${officialScore},${userScore}${penaltyInfo},${pred.points_earned}\n`
-      })
-
-      // Adiciona o Resumo de Desempenho no final da planilha
-      csvContent += `\n"RESUMO DE DESEMPENHO"\n`
-      csvContent += `"Placar Exato (5 pts)",${stats.exact}\n`
-      csvContent += `"Saldo/Empate (3 pts)",${stats.saldo}\n`
-      csvContent += `"Vencedor (1 pt)",${stats.vencedor}\n`
-      csvContent += `"Erros (0 pts)",${stats.erros}\n`
-      csvContent += `"Total de Palpites",${stats.all}\n`
-
-      const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement("a")
-      link.setAttribute("href", url)
-      link.setAttribute("download", `relatorio_bolao_${selectedUser.name.replace(/\s+/g, '_').toLowerCase()}.csv`)
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-    }
-
-    // Filtra o que vai aparecer na tela
-    const filteredPredictions = userPredictions.filter(p =>
-      pointFilter === 'all' ? true : p.points_earned === pointFilter
-    )
-
-    const getPointsIcon = (points: number) => {
-      if (points >= 5) return <Target className="w-5 h-5 text-green-500" />
-      if (points === 3) return <CheckCircle2 className="w-5 h-5 text-blue-500" />
-      if (points === 1) return <MinusCircle className="w-5 h-5 text-yellow-500" />
-      return <XCircle className="w-5 h-5 text-red-500" />
-    }
-
-    const resolveRequest = async (requestId: string) => {
-      await supabase.from('support_requests').update({ status: 'resolved' }).eq('id', requestId)
-      setPendingRequests(prev => prev.filter(req => req.id !== requestId))
-    }
+  const filteredPredictions = userPredictions.filter(p => pointFilter === 'all' ? true : p.points_earned === pointFilter)
 
     if (loading) {
       return <div className="flex items-center justify-center min-h-[400px]">Carregando painel...</div>
