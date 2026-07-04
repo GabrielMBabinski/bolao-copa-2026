@@ -101,7 +101,13 @@ export default function Admin() {
 
   const filteredPredictions = userPredictions.filter(p => pointFilter === 'all' ? true : p.points_earned === pointFilter)
 
-    if (loading) {
+  const getPointsIcon = (points: number) => {
+    if (points >= 5) return <Target className="w-5 h-5 text-green-500" />
+    if (points === 3) return <CheckCircle2 className="w-5 h-5 text-blue-500" />
+    if (points === 1) return <MinusCircle className="w-5 h-5 text-yellow-500" />
+    return <XCircle className="w-5 h-5 text-red-500" />
+  }
+  if (loading) {
     return <div className="flex items-center justify-center min-h-[400px]">Carregando painel...</div>
   }
 
@@ -113,149 +119,149 @@ export default function Admin() {
           <Shield className="h-8 w-8" />
           Auditoria de Palpites
         </h1>
-          {/* PAINEL DE NOTIFICAÇÕES (Só aparece se alguém pedir relatório) */}
-          {!selectedUser && pendingRequests.length > 0 && (
-            <div className="bg-orange-500/10 border border-orange-500/30 p-4 rounded-lg animate-in fade-in">
-              <h3 className="font-bold text-orange-500 flex items-center gap-2 mb-3">
-                <span className="flex h-2 w-2 rounded-full bg-orange-500 animate-pulse"></span>
-                Solicitações de Relatório Pendentes ({pendingRequests.length})
-              </h3>
-              <div className="flex flex-col gap-2">
-                {pendingRequests.map(req => (
-                  <div key={req.id} className="flex items-center justify-between bg-background p-3 rounded border">
-                    <span className="text-sm font-medium">
-                      O usuário <b className="text-primary">{req.profiles?.name}</b> solicitou um relatório.
-                    </span>
-                    <div className="space-x-2">
-                      <Button size="sm" variant="outline" onClick={() => {
-                        // Seleciona o usuário automaticamente para o admin poder baixar o CSV
-                        const userToSelect = users.find(u => u.id === req.user_id)
-                        if (userToSelect) setSelectedUser(userToSelect)
-                      }}>
-                        Ver Palpites
-                      </Button>
-                      <Button size="sm" onClick={() => resolveRequest(req.id)}>
-                        <CheckCircle2 className="w-4 h-4 mr-1" /> Marcar como Enviado
-                      </Button>
-                    </div>
+        {/* PAINEL DE NOTIFICAÇÕES (Só aparece se alguém pedir relatório) */}
+        {!selectedUser && pendingRequests.length > 0 && (
+          <div className="bg-orange-500/10 border border-orange-500/30 p-4 rounded-lg animate-in fade-in">
+            <h3 className="font-bold text-orange-500 flex items-center gap-2 mb-3">
+              <span className="flex h-2 w-2 rounded-full bg-orange-500 animate-pulse"></span>
+              Solicitações de Relatório Pendentes ({pendingRequests.length})
+            </h3>
+            <div className="flex flex-col gap-2">
+              {pendingRequests.map(req => (
+                <div key={req.id} className="flex items-center justify-between bg-background p-3 rounded border">
+                  <span className="text-sm font-medium">
+                    O usuário <b className="text-primary">{req.profiles?.name}</b> solicitou um relatório.
+                  </span>
+                  <div className="space-x-2">
+                    <Button size="sm" variant="outline" onClick={() => {
+                      // Seleciona o usuário automaticamente para o admin poder baixar o CSV
+                      const userToSelect = users.find(u => u.id === req.user_id)
+                      if (userToSelect) setSelectedUser(userToSelect)
+                    }}>
+                      Ver Palpites
+                    </Button>
+                    <Button size="sm" onClick={() => resolveRequest(req.id)}>
+                      <CheckCircle2 className="w-4 h-4 mr-1" /> Marcar como Enviado
+                    </Button>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-          <p className="text-muted-foreground">
-            Selecione um usuário para visualizar o detalhamento de seus acertos e erros.
-          </p>
-        </div>
-
-        {!selectedUser ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Participantes do Bolão</CardTitle>
-              <CardDescription>Clique em um usuário para ver seu histórico de palpites.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {users.map(user => (
-                <Button
-                  key={user.id}
-                  variant="outline"
-                  className="h-auto p-4 flex items-center justify-start gap-4 hover:border-primary transition-all"
-                  onClick={() => setSelectedUser(user)}
-                >
-                  <div className="bg-muted w-10 h-10 rounded-full flex items-center justify-center">
-                    {user.avatar_url ? (
-                      <img src={user.avatar_url} alt={user.name} className="w-full h-full rounded-full object-cover" />
-                    ) : (
-                      <User className="w-5 h-5 text-muted-foreground" />
-                    )}
-                  </div>
-                  <div className="text-left">
-                    <p className="font-bold">{user.name}</p>
-                    <p className="text-xs text-muted-foreground">Ver detalhes</p>
-                  </div>
-                </Button>
+                </div>
               ))}
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-6">
-            <Button variant="ghost" onClick={() => setSelectedUser(null)} className="mb-2">
-              <ArrowLeft className="w-4 h-4 mr-2" /> Voltar para a lista
-            </Button>
-
-            <Card>
-              <CardHeader className="flex flex-row items-start justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <User className="w-6 h-6" /> Desempenho: {selectedUser.name}
-                  </CardTitle>
-                  <CardDescription className="mt-1">Filtre os palpites por pontuação recebida.</CardDescription>
-                </div>
-                <Button onClick={exportToCSV} disabled={loadingPredictions || userPredictions.length === 0} variant="outline" className="gap-2">
-                  <Download className="w-4 h-4" /> Baixar Relatório (CSV)
-                </Button>
-              </CardHeader>
-
-              <CardContent>
-                <div className="flex flex-wrap gap-2 mb-6 p-4 bg-muted/30 rounded-lg">
-                  <Button variant={pointFilter === 'all' ? 'default' : 'outline'} size="sm" onClick={() => setPointFilter('all')}>
-                    Todos ({stats.all})
-                  </Button>
-                  <Button variant={pointFilter === 5 ? 'default' : 'outline'} size="sm" onClick={() => setPointFilter(5)} className="text-green-500">
-                    <Target className="w-4 h-4 mr-1" /> Placar Exato ({stats.exact})
-                  </Button>
-                  <Button variant={pointFilter === 3 ? 'default' : 'outline'} size="sm" onClick={() => setPointFilter(3)} className="text-blue-500">
-                    <CheckCircle2 className="w-4 h-4 mr-1" /> Saldo/Empate ({stats.saldo})
-                  </Button>
-                  <Button variant={pointFilter === 1 ? 'default' : 'outline'} size="sm" onClick={() => setPointFilter(1)} className="text-yellow-500">
-                    <MinusCircle className="w-4 h-4 mr-1" /> Vencedor ({stats.vencedor})
-                  </Button>
-                  <Button variant={pointFilter === 0 ? 'default' : 'outline'} size="sm" onClick={() => setPointFilter(0)} className="text-red-500">
-                    <XCircle className="w-4 h-4 mr-1" /> Erros ({stats.erros})
-                  </Button>
-                </div>
-
-                {loadingPredictions ? (
-                  <p className="text-center py-8 text-muted-foreground">Buscando histórico...</p>
-                ) : filteredPredictions.length === 0 ? (
-                  <p className="text-center py-8 text-muted-foreground">Nenhum palpite encontrado para este filtro.</p>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {filteredPredictions.map(pred => (
-                      <div key={pred.id} className="border rounded-lg p-4 flex items-center justify-between bg-card hover:bg-muted/10 transition-colors">
-                        <div className="flex-1">
-                          <div className="flex justify-between items-center text-sm mb-2">
-                            <span className="font-semibold">{pred.match.home_team.name}</span>
-                            <span className="text-muted-foreground px-2">vs</span>
-                            <span className="font-semibold">{pred.match.away_team.name}</span>
-                          </div>
-                          <div className="flex items-center gap-4 text-sm">
-                            <Badge variant="outline" className="bg-slate-800 text-white border-transparent">
-                              Oficial: {pred.match.home_score} x {pred.match.away_score}
-                            </Badge>
-                            <span className="font-medium text-muted-foreground flex flex-col">
-                              <span>Palpite: {pred.home_score} x {pred.away_score}</span>
-                              {pred.penalty_winner && (
-                                <span className="text-[10px] uppercase font-bold text-primary mt-1">
-                                  Pênaltis: {pred.penalty_winner === 'home' ? pred.match.home_team.name : pred.match.away_team.name}
-                                </span>
-                              )}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="ml-4 flex flex-col items-center justify-center border-l pl-4 min-w-[80px]">
-                          {getPointsIcon(pred.points_earned)}
-                          <span className="font-bold mt-1 text-lg">{pred.points_earned}</span>
-                          <span className="text-[10px] text-muted-foreground uppercase">pts</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            </div>
           </div>
         )}
+        <p className="text-muted-foreground">
+          Selecione um usuário para visualizar o detalhamento de seus acertos e erros.
+        </p>
       </div>
-    )
-  }
+
+      {!selectedUser ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Participantes do Bolão</CardTitle>
+            <CardDescription>Clique em um usuário para ver seu histórico de palpites.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {users.map(user => (
+              <Button
+                key={user.id}
+                variant="outline"
+                className="h-auto p-4 flex items-center justify-start gap-4 hover:border-primary transition-all"
+                onClick={() => setSelectedUser(user)}
+              >
+                <div className="bg-muted w-10 h-10 rounded-full flex items-center justify-center">
+                  {user.avatar_url ? (
+                    <img src={user.avatar_url} alt={user.name} className="w-full h-full rounded-full object-cover" />
+                  ) : (
+                    <User className="w-5 h-5 text-muted-foreground" />
+                  )}
+                </div>
+                <div className="text-left">
+                  <p className="font-bold">{user.name}</p>
+                  <p className="text-xs text-muted-foreground">Ver detalhes</p>
+                </div>
+              </Button>
+            ))}
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-6">
+          <Button variant="ghost" onClick={() => setSelectedUser(null)} className="mb-2">
+            <ArrowLeft className="w-4 h-4 mr-2" /> Voltar para a lista
+          </Button>
+
+          <Card>
+            <CardHeader className="flex flex-row items-start justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <User className="w-6 h-6" /> Desempenho: {selectedUser.name}
+                </CardTitle>
+                <CardDescription className="mt-1">Filtre os palpites por pontuação recebida.</CardDescription>
+              </div>
+              <Button onClick={exportToCSV} disabled={loadingPredictions || userPredictions.length === 0} variant="outline" className="gap-2">
+                <Download className="w-4 h-4" /> Baixar Relatório (CSV)
+              </Button>
+            </CardHeader>
+
+            <CardContent>
+              <div className="flex flex-wrap gap-2 mb-6 p-4 bg-muted/30 rounded-lg">
+                <Button variant={pointFilter === 'all' ? 'default' : 'outline'} size="sm" onClick={() => setPointFilter('all')}>
+                  Todos ({stats.all})
+                </Button>
+                <Button variant={pointFilter === 5 ? 'default' : 'outline'} size="sm" onClick={() => setPointFilter(5)} className="text-green-500">
+                  <Target className="w-4 h-4 mr-1" /> Placar Exato ({stats.exact})
+                </Button>
+                <Button variant={pointFilter === 3 ? 'default' : 'outline'} size="sm" onClick={() => setPointFilter(3)} className="text-blue-500">
+                  <CheckCircle2 className="w-4 h-4 mr-1" /> Saldo/Empate ({stats.saldo})
+                </Button>
+                <Button variant={pointFilter === 1 ? 'default' : 'outline'} size="sm" onClick={() => setPointFilter(1)} className="text-yellow-500">
+                  <MinusCircle className="w-4 h-4 mr-1" /> Vencedor ({stats.vencedor})
+                </Button>
+                <Button variant={pointFilter === 0 ? 'default' : 'outline'} size="sm" onClick={() => setPointFilter(0)} className="text-red-500">
+                  <XCircle className="w-4 h-4 mr-1" /> Erros ({stats.erros})
+                </Button>
+              </div>
+
+              {loadingPredictions ? (
+                <p className="text-center py-8 text-muted-foreground">Buscando histórico...</p>
+              ) : filteredPredictions.length === 0 ? (
+                <p className="text-center py-8 text-muted-foreground">Nenhum palpite encontrado para este filtro.</p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {filteredPredictions.map(pred => (
+                    <div key={pred.id} className="border rounded-lg p-4 flex items-center justify-between bg-card hover:bg-muted/10 transition-colors">
+                      <div className="flex-1">
+                        <div className="flex justify-between items-center text-sm mb-2">
+                          <span className="font-semibold">{pred.match.home_team.name}</span>
+                          <span className="text-muted-foreground px-2">vs</span>
+                          <span className="font-semibold">{pred.match.away_team.name}</span>
+                        </div>
+                        <div className="flex items-center gap-4 text-sm">
+                          <Badge variant="outline" className="bg-slate-800 text-white border-transparent">
+                            Oficial: {pred.match.home_score} x {pred.match.away_score}
+                          </Badge>
+                          <span className="font-medium text-muted-foreground flex flex-col">
+                            <span>Palpite: {pred.home_score} x {pred.away_score}</span>
+                            {pred.penalty_winner && (
+                              <span className="text-[10px] uppercase font-bold text-primary mt-1">
+                                Pênaltis: {pred.penalty_winner === 'home' ? pred.match.home_team.name : pred.match.away_team.name}
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="ml-4 flex flex-col items-center justify-center border-l pl-4 min-w-[80px]">
+                        {getPointsIcon(pred.points_earned)}
+                        <span className="font-bold mt-1 text-lg">{pred.points_earned}</span>
+                        <span className="text-[10px] text-muted-foreground uppercase">pts</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+    </div>
+  )
+}
