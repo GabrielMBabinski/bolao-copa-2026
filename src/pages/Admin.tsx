@@ -306,8 +306,8 @@ export default function Admin() {
       )}
     </div>
   )
-}
-const resolveRequest = async (requestId: string) => {
-  await supabase.from('support_requests').update({ status: 'resolved' }).eq('id', requestId)
-  setPendingRequests(prev => prev.filter(req => req.id !== requestId))
+  const resolveRequest = async (requestId: string) => {
+    await supabase.from('support_requests').update({ status: 'resolved' }).eq('id', requestId)
+    setPendingRequests(prev => prev.filter(req => req.id !== requestId))
+  }
 }
