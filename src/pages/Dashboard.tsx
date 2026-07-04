@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Calendar, Clock, Trophy, BadgeDollarSign, CheckCircle2, ChevronDown, XCircle, FileText } from 'lucide-react'
 import TeamFlag from '@/components/TeamFlag'
 import UserAvatar from '@/components/UserAvatar'
+import { Button } from '@/components/ui/button'
 
 // FUNÇÃO QUE BUSCA TUDO DE UMA VEZ
 const fetchDashboardData = async () => {
