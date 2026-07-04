@@ -97,11 +97,19 @@ export default function Dashboard() {
       return
     }
 
-    // 2. Monta o arquivo CSV no navegador
+    // --- CÁLCULO DAS ESTATÍSTICAS (O resumo que você pediu) ---
+    const stats = {
+      all: data.length,
+      exact: data.filter(p => p.points_earned === 5).length,
+      saldo: data.filter(p => p.points_earned === 3).length,
+      vencedor: data.filter(p => p.points_earned === 1).length,
+      erros: data.filter(p => p.points_earned === 0).length,
+    }
+
+    // 2. Monta o arquivo CSV
     let csvContent = "Data,Partida,Placar Oficial,Seu Palpite,Pontos Ganhos\n"
 
     data.forEach((pred: any) => {
-      // Ignora dados corrompidos caso o banco tenha alguma falha
       if (!pred.match || !pred.match.home_team) return
 
       const date = new Date(pred.match.match_date).toLocaleDateString('pt-BR')
@@ -112,7 +120,15 @@ export default function Dashboard() {
       csvContent += `"${date}","${matchStr}",${officialScore},${userScore},${pred.points_earned}\n`
     })
 
-    // 3. Força o download na máquina do usuário
+    // 3. Adiciona o Resumo no final do arquivo
+    csvContent += `\n"RESUMO DE DESEMPENHO"\n`
+    csvContent += `"Placar Exato (5 pts)",${stats.exact}\n`
+    csvContent += `"Saldo/Empate (3 pts)",${stats.saldo}\n`
+    csvContent += `"Vencedor (1 pt)",${stats.vencedor}\n`
+    csvContent += `"Erros (0 pts)",${stats.erros}\n`
+    csvContent += `"Total de Palpites",${stats.all}\n`
+
+    // 4. Download e "Rasgar o ticket" (deleta a liberação)
     const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
@@ -121,6 +137,10 @@ export default function Dashboard() {
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
+
+    // Deleta o pedido para exigir nova autorização no futuro
+    await supabase.from('support_requests').delete().eq('user_id', profile.id)
+    setRequestStatus('idle')
   }
 
   // NOVO: Temporizador de 5 segundos
@@ -469,15 +489,15 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent className="flex items-center justify-between bg-muted/20 p-4 rounded-lg mt-4 mx-6 mb-6">
             <p className="text-sm text-muted-foreground w-2/3">
-              {requestStatus === 'resolved' 
+              {requestStatus === 'resolved'
                 ? 'Sua solicitação foi aprovada! Você já pode baixar a sua planilha atualizada com os seus resultados.'
                 : 'Ao solicitar, o administrador será notificado e liberará o download de um arquivo CSV contendo seu histórico.'}
             </p>
-            
+
             {/* O BOTÃO INTELIGENTE */}
             {requestStatus === 'resolved' ? (
-              <Button 
-                onClick={handleDownloadMyReport} 
+              <Button
+                onClick={handleDownloadMyReport}
                 className="bg-green-600 hover:bg-green-700 text-white gap-2"
               >
                 <FileText className="w-4 h-4" /> Baixar Relatório
