@@ -32,20 +32,23 @@ export default function Dashboard() {
 
   const [showPoster, setShowPoster] = useState(true)
 
-const [requestStatus, setRequestStatus] = useState<'idle' | 'loading' | 'pending' | 'success'>('loading')
+  const [requestStatus, setRequestStatus] = useState<'idle' | 'loading' | 'pending' | 'resolved' | 'success'>('loading')
 
-  // === COLE O NOVO CÓDIGO CORRIGIDO AQUI ===
   useEffect(() => {
     async function checkPendingRequest() {
       if (!profile?.id) return
       const { data } = await supabase
         .from('support_requests')
-        .select('id')
+        .select('status')
         .eq('user_id', profile.id)
-        .eq('status', 'pending')
-        .maybeSingle() // <--- Troque single() por maybeSingle() aqui!
+        .maybeSingle()
 
-      setRequestStatus(data ? 'pending' : 'idle')
+      // Se achou um pedido, define se está pendente ou se o admin já resolveu (aprovou)
+      if (data) {
+        setRequestStatus(data.status === 'pending' ? 'pending' : 'resolved')
+      } else {
+        setRequestStatus('idle')
+      }
     }
     checkPendingRequest()
   }, [profile])
@@ -69,6 +72,55 @@ const [requestStatus, setRequestStatus] = useState<'idle' | 'loading' | 'pending
         setRequestStatus('idle')
       }
     }
+  }
+
+  // NOVA FUNÇÃO: O próprio usuário baixa o CSV dele!
+  const handleDownloadMyReport = async () => {
+    if (!profile?.id) return
+
+    // 1. Busca os palpites finalizados do próprio usuário
+    const { data, error } = await supabase
+      .from('predictions')
+      .select(`
+        points_earned, home_score, away_score,
+        match:matches(
+          home_score, away_score, match_date,
+          home_team:teams!matches_home_team_id_fkey(name),
+          away_team:teams!matches_away_team_id_fkey(name)
+        )
+      `)
+      .eq('user_id', profile.id)
+      .eq('match.status', 'finished')
+
+    if (error || !data) {
+      alert('Erro ao gerar relatório.')
+      return
+    }
+
+    // 2. Monta o arquivo CSV no navegador
+    let csvContent = "Data,Partida,Placar Oficial,Seu Palpite,Pontos Ganhos\n"
+
+    data.forEach((pred: any) => {
+      // Ignora dados corrompidos caso o banco tenha alguma falha
+      if (!pred.match || !pred.match.home_team) return
+
+      const date = new Date(pred.match.match_date).toLocaleDateString('pt-BR')
+      const matchStr = `${pred.match.home_team.name} vs ${pred.match.away_team.name}`
+      const officialScore = `'${pred.match.home_score} x ${pred.match.away_score}`
+      const userScore = `'${pred.home_score} x ${pred.away_score}`
+
+      csvContent += `"${date}","${matchStr}",${officialScore},${userScore},${pred.points_earned}\n`
+    })
+
+    // 3. Força o download na máquina do usuário
+    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.setAttribute("href", url)
+    link.setAttribute("download", `meu_desempenho_bolao.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
   }
 
   // NOVO: Temporizador de 5 segundos
@@ -417,18 +469,31 @@ const [requestStatus, setRequestStatus] = useState<'idle' | 'loading' | 'pending
           </CardHeader>
           <CardContent className="flex items-center justify-between bg-muted/20 p-4 rounded-lg mt-4 mx-6 mb-6">
             <p className="text-sm text-muted-foreground w-2/3">
-              Ao solicitar, o administrador será notificado e enviará o arquivo CSV contendo todo o seu histórico detalhado.
+              {requestStatus === 'resolved' 
+                ? 'Sua solicitação foi aprovada! Você já pode baixar a sua planilha atualizada com os seus resultados.'
+                : 'Ao solicitar, o administrador será notificado e liberará o download de um arquivo CSV contendo seu histórico.'}
             </p>
-            <Button
-              onClick={handleRequestReport}
-              disabled={requestStatus === 'pending' || requestStatus === 'loading' || requestStatus === 'success'}
-              variant={requestStatus === 'pending' ? 'secondary' : 'default'}
-            >
-              {requestStatus === 'loading' && 'Processando...'}
-              {requestStatus === 'idle' && 'Solicitar Relatório'}
-              {requestStatus === 'success' && <><CheckCircle2 className="w-4 h-4 mr-2 text-green-500" /> Solicitado!</>}
-              {requestStatus === 'pending' && 'Solicitação em Análise'}
-            </Button>
+            
+            {/* O BOTÃO INTELIGENTE */}
+            {requestStatus === 'resolved' ? (
+              <Button 
+                onClick={handleDownloadMyReport} 
+                className="bg-green-600 hover:bg-green-700 text-white gap-2"
+              >
+                <FileText className="w-4 h-4" /> Baixar Relatório
+              </Button>
+            ) : (
+              <Button
+                onClick={handleRequestReport}
+                disabled={requestStatus === 'pending' || requestStatus === 'loading' || requestStatus === 'success'}
+                variant={requestStatus === 'pending' ? 'secondary' : 'default'}
+              >
+                {requestStatus === 'loading' && 'Processando...'}
+                {requestStatus === 'idle' && 'Solicitar Liberação'}
+                {requestStatus === 'success' && <><CheckCircle2 className="w-4 h-4 mr-2 text-green-500" /> Solicitado!</>}
+                {requestStatus === 'pending' && 'Liberação em Análise'}
+              </Button>
+            )}
           </CardContent>
         </Card>
       </div>
