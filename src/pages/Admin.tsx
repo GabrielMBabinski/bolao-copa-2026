@@ -77,7 +77,7 @@ export default function Admin() {
         const { data, error } = await supabase
           .from('predictions')
           .select(`
-            id, points_earned, home_score, away_score,
+            id, points_earned, home_score, away_score, penalty_winner,
             match:matches(
               id, home_score, away_score, status, match_date,
               home_team:teams!matches_home_team_id_fkey(name, flag_code),
@@ -118,11 +118,14 @@ export default function Admin() {
     userPredictions.forEach(pred => {
       const date = new Date(pred.match.match_date).toLocaleDateString('pt-BR')
       const matchStr = `${pred.match.home_team.name} vs ${pred.match.away_team.name}`
-      const officialScore = `'${pred.match.home_score} x ${pred.match.away_score}`
+      const officialScore = `'${pred.match.home_score} x ${pred.away_score}`
       const userScore = `'${pred.home_score} x ${pred.away_score}`
-      const points = pred.points_earned
-
-      csvContent += `"${date}","${matchStr}",${officialScore},${userScore},${points}\n`
+      
+      // NOVA LÓGICA: Verifica se houve pênaltis no palpite
+      // Nota: No Admin você usa 'pred' direto, verifique se seu objeto de predição possui o campo penalty_winner
+      const penaltyInfo = (pred as any).penalty_winner ? ` (Pênaltis: ${(pred as any).penalty_winner})` : ""
+      
+      csvContent += `"${date}","${matchStr}",${officialScore},${userScore}${penaltyInfo},${pred.points_earned}\n`
     })
 
     // Adiciona o Resumo de Desempenho no final da planilha
