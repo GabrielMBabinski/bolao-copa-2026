@@ -161,7 +161,7 @@ export default function Admin() {
           <XCircle className="w-4 h-4 mr-1" /> Erros ({stats.erros})
         </Button>
       </div>
-
+ 
       {loadingPredictions ? (
         <p className="text-center py-8 text-muted-foreground">Buscando histórico...</p>
       ) : filteredPredictions.length === 0 ? (
