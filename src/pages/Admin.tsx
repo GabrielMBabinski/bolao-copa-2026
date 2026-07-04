@@ -35,6 +35,7 @@ export default function Admin() {
   const [userPredictions, setUserPredictions] = useState<UserPrediction[]>([])
   const [loadingPredictions, setLoadingPredictions] = useState(false)
   const [pointFilter, setPointFilter] = useState<number | 'all'>('all')
+  const [pendingRequests, setPendingRequests] = useState<any[]>([])
 
   useEffect(() => {
     async function loadUsers() {
@@ -43,7 +44,7 @@ export default function Admin() {
           .from('profiles')
           .select('id, name, avatar_url')
           .order('name')
-        
+
         if (error) throw error
         setUsers(data || [])
       } catch (error) {
@@ -53,7 +54,20 @@ export default function Admin() {
       }
     }
     loadUsers()
+
+    async function loadRequests() {
+      const { data } = await supabase
+        .from('support_requests')
+        .select('id, user_id, profiles(name)')
+        .eq('status', 'pending')
+      setPendingRequests(data || [])
+    }
+    loadRequests()
   }, [])
+  // Adicione esta função logo abaixo da loadUsers() e chame ela
+
+
+
 
   useEffect(() => {
     async function loadPredictions() {
@@ -72,9 +86,9 @@ export default function Admin() {
           `)
           .eq('user_id', selectedUser.id)
           .eq('match.status', 'finished')
-        
+
         if (error) throw error
-        
+
         const validPredictions = (data as any[]).filter(p => p.match !== null)
         setUserPredictions(validPredictions)
       } catch (error) {
@@ -130,7 +144,7 @@ export default function Admin() {
   }
 
   // Filtra o que vai aparecer na tela
-  const filteredPredictions = userPredictions.filter(p => 
+  const filteredPredictions = userPredictions.filter(p =>
     pointFilter === 'all' ? true : p.points_earned === pointFilter
   )
 
@@ -152,6 +166,36 @@ export default function Admin() {
           <Shield className="h-8 w-8" />
           Auditoria de Palpites
         </h1>
+        {/* PAINEL DE NOTIFICAÇÕES (Só aparece se alguém pedir relatório) */}
+        {!selectedUser && pendingRequests.length > 0 && (
+          <div className="bg-orange-500/10 border border-orange-500/30 p-4 rounded-lg animate-in fade-in">
+            <h3 className="font-bold text-orange-500 flex items-center gap-2 mb-3">
+              <span className="flex h-2 w-2 rounded-full bg-orange-500 animate-pulse"></span>
+              Solicitações de Relatório Pendentes ({pendingRequests.length})
+            </h3>
+            <div className="flex flex-col gap-2">
+              {pendingRequests.map(req => (
+                <div key={req.id} className="flex items-center justify-between bg-background p-3 rounded border">
+                  <span className="text-sm font-medium">
+                    O usuário <b className="text-primary">{req.profiles?.name}</b> solicitou um relatório.
+                  </span>
+                  <div className="space-x-2">
+                    <Button size="sm" variant="outline" onClick={() => {
+                      // Seleciona o usuário automaticamente para o admin poder baixar o CSV
+                      const userToSelect = users.find(u => u.id === req.user_id)
+                      if (userToSelect) setSelectedUser(userToSelect)
+                    }}>
+                      Ver Palpites
+                    </Button>
+                    <Button size="sm" onClick={() => resolveRequest(req.id)}>
+                      <CheckCircle2 className="w-4 h-4 mr-1" /> Marcar como Enviado
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <p className="text-muted-foreground">
           Selecione um usuário para visualizar o detalhamento de seus acertos e erros.
         </p>
@@ -165,9 +209,9 @@ export default function Admin() {
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {users.map(user => (
-              <Button 
-                key={user.id} 
-                variant="outline" 
+              <Button
+                key={user.id}
+                variant="outline"
                 className="h-auto p-4 flex items-center justify-start gap-4 hover:border-primary transition-all"
                 onClick={() => setSelectedUser(user)}
               >
@@ -204,7 +248,7 @@ export default function Admin() {
                 <Download className="w-4 h-4" /> Baixar Relatório (CSV)
               </Button>
             </CardHeader>
-            
+
             <CardContent>
               <div className="flex flex-wrap gap-2 mb-6 p-4 bg-muted/30 rounded-lg">
                 <Button variant={pointFilter === 'all' ? 'default' : 'outline'} size="sm" onClick={() => setPointFilter('all')}>
@@ -262,4 +306,8 @@ export default function Admin() {
       )}
     </div>
   )
+}
+const resolveRequest = async (requestId: string) => {
+  await supabase.from('support_requests').update({ status: 'resolved' }).eq('id', requestId)
+  setPendingRequests(prev => prev.filter(req => req.id !== requestId))
 }

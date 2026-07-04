@@ -5,7 +5,7 @@ import { matches, profiles } from '@/lib/supabaseClient'
 import type { MatchWithTeams } from '@/types/database'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Calendar, Clock, Trophy, BadgeDollarSign, CheckCircle2, ChevronDown, XCircle } from 'lucide-react'
+import { Calendar, Clock, Trophy, BadgeDollarSign, CheckCircle2, ChevronDown, XCircle, FileText } from 'lucide-react'
 import TeamFlag from '@/components/TeamFlag'
 import UserAvatar from '@/components/UserAvatar'
 
@@ -367,6 +367,30 @@ export default function Dashboard() {
             </div>
           </CardContent>
         </Card>
+        <Card className="md:col-span-2 lg:col-span-3">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <FileText className="w-5 h-5 text-primary" />
+              Central de Suporte & Relatórios
+            </CardTitle>
+            <CardDescription>Deseja uma cópia em planilha da sua auditoria de palpites?</CardDescription>
+          </CardHeader>
+          <CardContent className="flex items-center justify-between bg-muted/20 p-4 rounded-lg mt-4 mx-6 mb-6">
+            <p className="text-sm text-muted-foreground w-2/3">
+              Ao solicitar, o administrador será notificado e enviará o arquivo CSV contendo todo o seu histórico detalhado.
+            </p>
+            <Button
+              onClick={handleRequestReport}
+              disabled={requestStatus === 'pending' || requestStatus === 'loading' || requestStatus === 'success'}
+              variant={requestStatus === 'pending' ? 'secondary' : 'default'}
+            >
+              {requestStatus === 'loading' && 'Processando...'}
+              {requestStatus === 'idle' && 'Solicitar Relatório'}
+              {requestStatus === 'success' && <><CheckCircle2 className="w-4 h-4 mr-2 text-green-500" /> Solicitado!</>}
+              {requestStatus === 'pending' && 'Solicitação em Análise'}
+            </Button>
+          </CardContent>
+        </Card>
       </div>
 
       {myProfile?.payment_status === 'unpaid' && (
@@ -385,4 +409,44 @@ export default function Dashboard() {
 
     </div>
   )
+}
+const [requestStatus, setRequestStatus] = useState<'idle' | 'loading' | 'pending' | 'success'>('loading')
+
+// Checa se o usuário já pediu o relatório
+useEffect(() => {
+  async function checkPendingRequest() {
+    if (!user) return
+    const { data } = await supabase
+      .from('support_requests')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('status', 'pending')
+      .single()
+
+    setRequestStatus(data ? 'pending' : 'idle')
+  }
+  checkPendingRequest()
+}, [user])
+
+// Função para fazer o pedido
+const handleRequestReport = async () => {
+  if (!user) return
+  setRequestStatus('loading')
+  try {
+    const { error } = await supabase
+      .from('support_requests')
+      .insert([{ user_id: user.id }])
+
+    if (error) throw error
+    setRequestStatus('success')
+    setTimeout(() => setRequestStatus('pending'), 2000)
+  } catch (error: any) {
+    // Se der erro de duplicate key (tentou burlar o anti-spam), volta pra pending
+    if (error.code === '23505') {
+      setRequestStatus('pending')
+    } else {
+      alert('Erro ao solicitar relatório. Tente novamente.')
+      setRequestStatus('idle')
+    }
+  }
 }
