@@ -23,7 +23,7 @@ const normalizeDate = (dateString: string | null) => {
 
   const hasTimezone = safe.includes('Z') || safe.match(/[+-]\d{2}:\d{2}$/)
   if (!hasTimezone) safe += '-04:00'
-  
+
   return new Date(safe)
 }
 
@@ -65,7 +65,7 @@ const FriendsPredictionsList = ({
   actualAwayScore,
   actualPenaltyWinner,
   homeTeamName,
-  awayTeamName 
+  awayTeamName
 }: {
   matchId: string,
   matchDate: string,
@@ -74,8 +74,8 @@ const FriendsPredictionsList = ({
   actualHomeScore?: number | null,
   actualAwayScore?: number | null,
   actualPenaltyWinner?: string | null,
-  homeTeamName?: string, 
-  awayTeamName?: string  
+  homeTeamName?: string,
+  awayTeamName?: string
 }) => {
   const [show, setShow] = useState(false)
   const [list, setList] = useState<any[]>([])
@@ -193,7 +193,7 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', ini
     const now = new Date();
     // Usa o normalizeDate limpo que evita crashes com null e ajusta Safari
     const matchDate = normalizeDate(match.match_date);
-    
+
     if (now >= matchDate || match.status !== 'pending') {
       alert("O jogo já começou ou foi encerrado!");
       return;
@@ -213,7 +213,7 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', ini
   const realCurrentTime = new Date(new Date().getTime() + timeOffset)
   // Corrige a checagem usando normalizeDate diretamente
   const isLocked = match.match_date ? (normalizeDate(match.match_date) <= realCurrentTime || match.status !== 'pending') : false
-  
+
   return (
     <div className={`p-4 border rounded-xl flex flex-col gap-6 ${isLocked ? 'opacity-80 bg-muted/10' : 'bg-card shadow-sm'}`}>
       <div className="flex items-center justify-between border-b pb-3">
@@ -276,8 +276,8 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', ini
           actualHomeScore={match.home_score}
           actualAwayScore={match.away_score}
           actualPenaltyWinner={match.penalty_winner}
-          homeTeamName={match.home_team?.name} 
-          awayTeamName={match.away_team?.name} 
+          homeTeamName={match.home_team?.name}
+          awayTeamName={match.away_team?.name}
         />
       )}
     </div>
@@ -304,11 +304,11 @@ const deriveNextPhase = (previousPhaseMatches: any[]) => {
     const matchB = previousPhaseMatches[i + 1];
 
     nextPhase.push({
-      id: `derived-${Math.random().toString(36).substring(7)}`, 
+      id: `derived-${Math.random().toString(36).substring(7)}`,
       home_team: matchA ? getAdvancingTeam(matchA) : null,
       away_team: matchB ? getAdvancingTeam(matchB) : null,
       status: 'pending',
-      match_date: null 
+      match_date: null
     });
   }
   return nextPhase;
@@ -317,9 +317,35 @@ const deriveNextPhase = (previousPhaseMatches: any[]) => {
 // --- COMPONENTE: ÁRVORE DO MATA-MATA (ESTILO FIFA) ---
 const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { allMatches: MatchWithTeams[], userPredictions: PredictionWithMatch[], onSave: any, timeOffset: number }) => {
   const [selectedMatch, setSelectedMatch] = useState<{ match: MatchWithTeams, pred: any } | null>(null)
+// 1. O ESTADO DA FASE FOCADA
   const [focusedPhase, setFocusedPhase] = useState<string | null>(null)
+  const [autoFocusSet, setAutoFocusSet] = useState(false)
 
-  const getBracketSide = (match: MatchWithTeams) => {
+  // 2. O DETETIVE DE FASES: Descobre qual fase a Copa está no momento
+  useEffect(() => {
+    if (allMatches.length === 0 || autoFocusSet) return;
+
+    const knockoutMatches = allMatches.filter(m => m.phase !== 'group' && m.phase !== 'third_place');
+    if (knockoutMatches.length > 0) {
+      const phasesOrder = ['round_32', 'round_16', 'quarter', 'semi', 'final'];
+      let activePhase = 'final'; // Assume final, a menos que encontre jogos pendentes antes
+
+      for (const phase of phasesOrder) {
+        const phaseMatches = knockoutMatches.filter(m => m.phase === phase);
+        if (phaseMatches.length === 0) continue;
+
+        // Se houver qualquer jogo nesta fase que não tenha o status 'finished',
+        // significa que esta é a fase principal acontecendo agora.
+        if (phaseMatches.some(m => m.status !== 'finished')) {
+          activePhase = phase;
+          break;
+        }
+      }
+      
+      setFocusedPhase(activePhase);
+      setAutoFocusSet(true); // Evita que ele fique redefinindo o zoom se o usuário quiser mexer
+    }
+  }, [allMatches, autoFocusSet]);  const getBracketSide = (match: MatchWithTeams) => {
     if (match.phase === 'final' || match.phase === 'third_place') return 'center';
     if (!match.match_date) return 'right';
 
@@ -389,10 +415,6 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
   const finalMatch = getPhaseMatches('final')[0]
   const thirdPlaceMatch = getPhaseMatches('third_place')[0]
 
-  const hasKnownTeam = (matches: any[]) => matches.some(m => m.home_team || m.away_team)
-  const showR16 = hasKnownTeam(r16.left) || hasKnownTeam(r16.right)
-  const showQF = hasKnownTeam(qf.left) || hasKnownTeam(qf.right)
-  const showSF = hasKnownTeam(sf.left) || hasKnownTeam(sf.right)
 
   const isPhaseConfirmed = (left: MatchWithTeams[], right: MatchWithTeams[]) => {
     const all = [...left, ...right];
@@ -408,9 +430,17 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
   const phaseLevels: Record<string, number> = { round_32: 0, round_16: 1, quarter: 2, semi: 3, final: 4 };
 
   const isPhaseVisible = (phase: string) => {
-    if (!focusedPhase) return true;
-    if (focusedPhase === 'round_32') return phase === 'round_32';
-    return phaseLevels[phase] >= phaseLevels[focusedPhase];
+    // Se o usuário clicar em "Limpar Filtro", mostra a árvore inteira normalmente
+    if (!focusedPhase) return true; 
+
+    // Calcula a diferença de níveis entre a fase atual do loop e a fase com Zoom
+    const diff = phaseLevels[phase] - phaseLevels[focusedPhase];
+
+    // Se o torneio já estiver na Final, mostra só ela.
+    if (focusedPhase === 'final') return diff === 0;
+
+    // O Segredo: Retorna "true" apenas para a Fase Principal (0) e a Próxima Fase (+1)
+    return diff === 0 || diff === 1;
   };
 
   const BracketNode = ({ match }: { match: MatchWithTeams }) => {
@@ -517,14 +547,14 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
           </Button>
         </div>
       )}
-
+      {/* ESQUERDA */}
       <div className="bg-muted/10 border border-dashed rounded-xl overflow-x-auto custom-scrollbar">
         <div className={`flex items-stretch min-w-max gap-8 px-8 pb-8 pt-4 transition-all duration-500 ${focusedPhase ? 'justify-center' : 'justify-between'}`}>
           <div className="flex gap-6 items-stretch">
             {isPhaseVisible('round_32') && <BracketColumn phase="round_32" matches={r32.left} isConfirmed={r32Confirmed} />}
-            {showR16 && isPhaseVisible('round_16') && <BracketColumn phase="round_16" matches={r16.left} isConfirmed={r16Confirmed} />}
-            {showQF && isPhaseVisible('quarter') && <BracketColumn phase="quarter" matches={qf.left} isConfirmed={qfConfirmed} />}
-            {showSF && isPhaseVisible('semi') && <BracketColumn phase="semi" matches={sf.left} isConfirmed={sfConfirmed} />}
+            {isPhaseVisible('round_16') && <BracketColumn phase="round_16" matches={r16.left} isConfirmed={r16Confirmed} />}
+            {isPhaseVisible('quarter') && <BracketColumn phase="quarter" matches={qf.left} isConfirmed={qfConfirmed} />}
+            {isPhaseVisible('semi') && <BracketColumn phase="semi" matches={sf.left} isConfirmed={sfConfirmed} />}
           </div>
           {isPhaseVisible('final') && (
             <div className="flex flex-col justify-center items-center gap-16 min-w-[260px] px-4 border-x border-border/50 animate-in fade-in duration-500">
@@ -551,11 +581,12 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
               )}
             </div>
           )}
+          {/* DIREITA */}
           <div className="flex flex-row-reverse gap-6 items-stretch">
             {isPhaseVisible('round_32') && <BracketColumn phase="round_32" matches={r32.right} isConfirmed={r32Confirmed} />}
-            {showR16 && isPhaseVisible('round_16') && <BracketColumn phase="round_16" matches={r16.right} isConfirmed={r16Confirmed} />}
-            {showQF && isPhaseVisible('quarter') && <BracketColumn phase="quarter" matches={qf.right} isConfirmed={qfConfirmed} />}
-            {showSF && isPhaseVisible('semi') && <BracketColumn phase="semi" matches={sf.right} isConfirmed={sfConfirmed} />}
+            {isPhaseVisible('round_16') && <BracketColumn phase="round_16" matches={r16.right} isConfirmed={r16Confirmed} />}
+            {isPhaseVisible('quarter') && <BracketColumn phase="quarter" matches={qf.right} isConfirmed={qfConfirmed} />}
+            {isPhaseVisible('semi') && <BracketColumn phase="semi" matches={sf.right} isConfirmed={sfConfirmed} />}
           </div>
         </div>
       </div>
@@ -611,13 +642,13 @@ export default function Predictions() {
       try {
         // Chama a função que criamos no Supabase
         const { data, error } = await supabase.rpc('get_server_time')
-        
+
         if (error) throw error
-        
+
         // Converte a data do servidor e a data local para calcular o Offset
         const serverTime = new Date(data).getTime()
         const localTime = new Date().getTime()
-        
+
         // Define a diferença de tempo perfeitamente
         setTimeOffset(serverTime - localTime)
       } catch (error) {
@@ -706,7 +737,7 @@ export default function Predictions() {
               .filter((p: any) => p.match.phase === 'group')
               .map((pred: any) => {
                 const realCurrentTime = new Date(new Date().getTime() + timeOffset)
-                
+
                 // Variáveis corretamente puxadas do 'pred.match' para não quebrar a aba!
                 const isLocked = pred.match.match_date ? (normalizeDate(pred.match.match_date) <= realCurrentTime || pred.match.status !== 'pending') : false
                 const isFinished = pred.match.status === 'finished'
