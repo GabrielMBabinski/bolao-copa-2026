@@ -102,16 +102,17 @@ export default function Admin() {
   const filteredPredictions = userPredictions.filter(p => pointFilter === 'all' ? true : p.points_earned === pointFilter)
 
     if (loading) {
-      return <div className="flex items-center justify-center min-h-[400px]">Carregando painel...</div>
-    }
+    return <div className="flex items-center justify-center min-h-[400px]">Carregando painel...</div>
+  }
 
-    return (
-      <div className="space-y-6 animate-in fade-in">
-        <div>
-          <h1 className="text-3xl font-bold mb-2 flex items-center gap-2">
-            <Shield className="h-8 w-8" />
-            Auditoria de Palpites
-          </h1>
+  return (
+    <div className="space-y-6 animate-in fade-in bg-background min-h-screen p-6">
+      {/* Todo o seu conteúdo JSX aqui dentro */}
+      <div>
+        <h1 className="text-3xl font-bold mb-2 flex items-center gap-2">
+          <Shield className="h-8 w-8" />
+          Auditoria de Palpites
+        </h1>
           {/* PAINEL DE NOTIFICAÇÕES (Só aparece se alguém pedir relatório) */}
           {!selectedUser && pendingRequests.length > 0 && (
             <div className="bg-orange-500/10 border border-orange-500/30 p-4 rounded-lg animate-in fade-in">
