@@ -117,7 +117,7 @@ export default function Dashboard() {
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
     link.setAttribute("href", url)
-    link.setAttribute("download", `meu_desempenho_bolao.csv`)
+    link.setAttribute("download", `${profile.name.replace(/\s+/g, '_')}_relatorio_bolao.csv`)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
