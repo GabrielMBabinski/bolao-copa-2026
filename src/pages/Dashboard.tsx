@@ -80,17 +80,25 @@ export default function Dashboard() {
 
     // 1. Busca os palpites finalizados do próprio usuário
     const { data, error } = await supabase
-      .from('predictions')
-      .select(`
-        points_earned, home_score, away_score,
-        match:matches(
-          home_score, away_score, match_date,
-          home_team:teams!matches_home_team_id_fkey(name),
-          away_team:teams!matches_away_team_id_fkey(name)
-        )
-      `)
-      .eq('user_id', profile.id)
-      .eq('match.status', 'finished')
+  .from('predictions')
+  .select(`
+    points_earned, home_score, away_score, penalty_winner, // Adicione aqui
+    match:matches(
+      home_score, away_score, match_date,
+      home_team:teams!matches_home_team_id_fkey(name),
+      away_team:teams!matches_away_team_id_fkey(name)
+    )
+  `)
+  .eq('user_id', profile.id)
+  .eq('match.status', 'finished')
+
+// 2. Garanta que o uso no forEach está pegando o valor correto
+data.forEach((pred: any) => {
+  // ...
+  const userScore = `'${pred.home_score} x ${pred.away_score}`
+  
+  // Agora pred.penalty_winner deve estar preenchido se o usuário apostou
+  const penaltyInfo = pred.penalty_winner ? ` (Pênaltis: ${pred.penalty_winner})` : ""
 
     if (error || !data) {
       alert('Erro ao gerar relatório.')
