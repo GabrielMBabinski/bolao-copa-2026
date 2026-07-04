@@ -43,7 +43,7 @@ export default function Admin() {
           .from('profiles')
           .select('id, name, avatar_url')
           .order('name')
-
+        
         if (error) throw error
         setUsers(data || [])
       } catch (error) {
@@ -72,9 +72,9 @@ export default function Admin() {
           `)
           .eq('user_id', selectedUser.id)
           .eq('match.status', 'finished')
-
+        
         if (error) throw error
-
+        
         const validPredictions = (data as any[]).filter(p => p.match !== null)
         setUserPredictions(validPredictions)
       } catch (error) {
@@ -90,10 +90,8 @@ export default function Admin() {
   const exportToCSV = () => {
     if (!selectedUser || userPredictions.length === 0) return
 
-    // Cria o cabeçalho do arquivo CSV
     let csvContent = "Data,Partida,Placar Oficial,Palpite do Usuario,Pontos Ganhos\n"
 
-    // Preenche as linhas com os dados
     userPredictions.forEach(pred => {
       const date = new Date(pred.match.match_date).toLocaleDateString('pt-BR')
       const matchStr = `${pred.match.home_team.name} vs ${pred.match.away_team.name}`
@@ -104,8 +102,7 @@ export default function Admin() {
       csvContent += `"${date}","${matchStr}",${officialScore},${userScore},${points}\n`
     })
 
-    // Cria o arquivo virtual e força o download
-    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' }) // BOM para acentuação no Excel
+    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
     link.setAttribute("href", url)
@@ -115,11 +112,12 @@ export default function Admin() {
     document.body.removeChild(link)
   }
 
-  const filteredPredictions = userPredictions.filter(p =>
+  // Filtra o que vai aparecer na tela
+  const filteredPredictions = userPredictions.filter(p => 
     pointFilter === 'all' ? true : p.points_earned === pointFilter
   )
 
-  // NOVO: Calcula a quantidade de cada tipo de acerto
+  // Calcula a quantidade de cada tipo de acerto
   const stats = {
     all: userPredictions.length,
     exact: userPredictions.filter(p => p.points_earned === 5).length,
@@ -140,65 +138,122 @@ export default function Admin() {
   }
 
   return (
-    // ... resto do HTML padrão até chegar nos botões ...
-
-    <CardContent>
-      {/* Botões de Filtro agora com contadores automáticos */}
-      <div className="flex flex-wrap gap-2 mb-6 p-4 bg-muted/30 rounded-lg">
-        <Button variant={pointFilter === 'all' ? 'default' : 'outline'} size="sm" onClick={() => setPointFilter('all')}>
-          Todos ({stats.all})
-        </Button>
-        <Button variant={pointFilter === 5 ? 'default' : 'outline'} size="sm" onClick={() => setPointFilter(5)} className="text-green-500">
-          <Target className="w-4 h-4 mr-1" /> Placar Exato ({stats.exact})
-        </Button>
-        <Button variant={pointFilter === 3 ? 'default' : 'outline'} size="sm" onClick={() => setPointFilter(3)} className="text-blue-500">
-          <CheckCircle2 className="w-4 h-4 mr-1" /> Saldo/Empate ({stats.saldo})
-        </Button>
-        <Button variant={pointFilter === 1 ? 'default' : 'outline'} size="sm" onClick={() => setPointFilter(1)} className="text-yellow-500">
-          <MinusCircle className="w-4 h-4 mr-1" /> Vencedor ({stats.vencedor})
-        </Button>
-        <Button variant={pointFilter === 0 ? 'default' : 'outline'} size="sm" onClick={() => setPointFilter(0)} className="text-red-500">
-          <XCircle className="w-4 h-4 mr-1" /> Erros ({stats.erros})
-        </Button>
+    <div className="space-y-6 animate-in fade-in">
+      <div>
+        <h1 className="text-3xl font-bold mb-2 flex items-center gap-2">
+          <Shield className="h-8 w-8" />
+          Auditoria de Palpites
+        </h1>
+        <p className="text-muted-foreground">
+          Selecione um usuário para visualizar o detalhamento de seus acertos e erros.
+        </p>
       </div>
- 
-      {loadingPredictions ? (
-        <p className="text-center py-8 text-muted-foreground">Buscando histórico...</p>
-      ) : filteredPredictions.length === 0 ? (
-        <p className="text-center py-8 text-muted-foreground">Nenhum palpite encontrado para este filtro.</p>
+
+      {!selectedUser ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Participantes do Bolão</CardTitle>
+            <CardDescription>Clique em um usuário para ver seu histórico de palpites.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {users.map(user => (
+              <Button 
+                key={user.id} 
+                variant="outline" 
+                className="h-auto p-4 flex items-center justify-start gap-4 hover:border-primary transition-all"
+                onClick={() => setSelectedUser(user)}
+              >
+                <div className="bg-muted w-10 h-10 rounded-full flex items-center justify-center">
+                  {user.avatar_url ? (
+                    <img src={user.avatar_url} alt={user.name} className="w-full h-full rounded-full object-cover" />
+                  ) : (
+                    <User className="w-5 h-5 text-muted-foreground" />
+                  )}
+                </div>
+                <div className="text-left">
+                  <p className="font-bold">{user.name}</p>
+                  <p className="text-xs text-muted-foreground">Ver detalhes</p>
+                </div>
+              </Button>
+            ))}
+          </CardContent>
+        </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filteredPredictions.map(pred => (
-            <div key={pred.id} className="border rounded-lg p-4 flex items-center justify-between bg-card hover:bg-muted/10 transition-colors">
-              <div className="flex-1">
-                <div className="flex justify-between items-center text-sm mb-2">
-                  <span className="font-semibold">{pred.match.home_team.name}</span>
-                  <span className="text-muted-foreground px-2">vs</span>
-                  <span className="font-semibold">{pred.match.away_team.name}</span>
-                </div>
-                <div className="flex items-center gap-4 text-sm">
-                  <Badge variant="outline" className="bg-slate-800 text-white border-transparent">
-                    Oficial: {pred.match.home_score} x {pred.match.away_score}
-                  </Badge>
-                  <span className="font-medium text-muted-foreground">
-                    Palpite: {pred.home_score} x {pred.away_score}
-                  </span>
-                </div>
+        <div className="space-y-6">
+          <Button variant="ghost" onClick={() => setSelectedUser(null)} className="mb-2">
+            <ArrowLeft className="w-4 h-4 mr-2" /> Voltar para a lista
+          </Button>
+
+          <Card>
+            {/* O BOTÃO DE DOWNLOAD ESTÁ AQUI NESTE HEADER */}
+            <CardHeader className="flex flex-row items-start justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <User className="w-6 h-6" /> Desempenho: {selectedUser.name}
+                </CardTitle>
+                <CardDescription className="mt-1">Filtre os palpites por pontuação recebida.</CardDescription>
               </div>
-              <div className="ml-4 flex flex-col items-center justify-center border-l pl-4 min-w-[80px]">
-                {getPointsIcon(pred.points_earned)}
-                <span className="font-bold mt-1 text-lg">{pred.points_earned}</span>
-                <span className="text-[10px] text-muted-foreground uppercase">pts</span>
+              <Button onClick={exportToCSV} disabled={loadingPredictions || userPredictions.length === 0} variant="outline" className="gap-2">
+                <Download className="w-4 h-4" /> Baixar Relatório (CSV)
+              </Button>
+            </CardHeader>
+            
+            <CardContent>
+              {/* BOTÕES COM OS CONTADORES DINÂMICOS */}
+              <div className="flex flex-wrap gap-2 mb-6 p-4 bg-muted/30 rounded-lg">
+                <Button variant={pointFilter === 'all' ? 'default' : 'outline'} size="sm" onClick={() => setPointFilter('all')}>
+                  Todos ({stats.all})
+                </Button>
+                <Button variant={pointFilter === 5 ? 'default' : 'outline'} size="sm" onClick={() => setPointFilter(5)} className="text-green-500">
+                  <Target className="w-4 h-4 mr-1" /> Placar Exato ({stats.exact})
+                </Button>
+                <Button variant={pointFilter === 3 ? 'default' : 'outline'} size="sm" onClick={() => setPointFilter(3)} className="text-blue-500">
+                  <CheckCircle2 className="w-4 h-4 mr-1" /> Saldo/Empate ({stats.saldo})
+                </Button>
+                <Button variant={pointFilter === 1 ? 'default' : 'outline'} size="sm" onClick={() => setPointFilter(1)} className="text-yellow-500">
+                  <MinusCircle className="w-4 h-4 mr-1" /> Vencedor ({stats.vencedor})
+                </Button>
+                <Button variant={pointFilter === 0 ? 'default' : 'outline'} size="sm" onClick={() => setPointFilter(0)} className="text-red-500">
+                  <XCircle className="w-4 h-4 mr-1" /> Erros ({stats.erros})
+                </Button>
               </div>
-            </div>
-          ))}
+
+              {loadingPredictions ? (
+                <p className="text-center py-8 text-muted-foreground">Buscando histórico...</p>
+              ) : filteredPredictions.length === 0 ? (
+                <p className="text-center py-8 text-muted-foreground">Nenhum palpite encontrado para este filtro.</p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {filteredPredictions.map(pred => (
+                    <div key={pred.id} className="border rounded-lg p-4 flex items-center justify-between bg-card hover:bg-muted/10 transition-colors">
+                      <div className="flex-1">
+                        <div className="flex justify-between items-center text-sm mb-2">
+                          <span className="font-semibold">{pred.match.home_team.name}</span>
+                          <span className="text-muted-foreground px-2">vs</span>
+                          <span className="font-semibold">{pred.match.away_team.name}</span>
+                        </div>
+                        <div className="flex items-center gap-4 text-sm">
+                          <Badge variant="outline" className="bg-slate-800 text-white border-transparent">
+                            Oficial: {pred.match.home_score} x {pred.match.away_score}
+                          </Badge>
+                          <span className="font-medium text-muted-foreground">
+                            Palpite: {pred.home_score} x {pred.away_score}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="ml-4 flex flex-col items-center justify-center border-l pl-4 min-w-[80px]">
+                        {getPointsIcon(pred.points_earned)}
+                        <span className="font-bold mt-1 text-lg">{pred.points_earned}</span>
+                        <span className="text-[10px] text-muted-foreground uppercase">pts</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       )}
-    </CardContent>
-          </Card >
-        </div >
-      )
-}
-    </div >
+    </div>
   )
 }
