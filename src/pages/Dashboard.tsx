@@ -43,7 +43,7 @@ const [requestStatus, setRequestStatus] = useState<'idle' | 'loading' | 'pending
         .select('id')
         .eq('user_id', profile.id)
         .eq('status', 'pending')
-        .single()
+        .maybeSingle() // <--- Troque single() por maybeSingle() aqui!
 
       setRequestStatus(data ? 'pending' : 'idle')
     }

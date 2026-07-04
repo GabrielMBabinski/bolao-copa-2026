@@ -155,6 +155,11 @@ export default function Admin() {
     return <XCircle className="w-5 h-5 text-red-500" />
   }
 
+  const resolveRequest = async (requestId: string) => {
+    await supabase.from('support_requests').update({ status: 'resolved' }).eq('id', requestId)
+    setPendingRequests(prev => prev.filter(req => req.id !== requestId))
+  }
+
   if (loading) {
     return <div className="flex items-center justify-center min-h-[400px]">Carregando painel...</div>
   }
@@ -306,8 +311,4 @@ export default function Admin() {
       )}
     </div>
   )
-  const resolveRequest = async (requestId: string) => {
-    await supabase.from('support_requests').update({ status: 'resolved' }).eq('id', requestId)
-    setPendingRequests(prev => prev.filter(req => req.id !== requestId))
-  }
 }
