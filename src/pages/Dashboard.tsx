@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import useSWR, { mutate } from 'swr' // <-- Novo import aqui
 import { useAuth } from '@/hooks/useAuth'
-import { matches, profiles } from '@/lib/supabaseClient'
+import { matches, profiles, supabase } from '@/lib/supabaseClient'
 import type { MatchWithTeams } from '@/types/database'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -32,8 +32,44 @@ export default function Dashboard() {
 
   const [showPoster, setShowPoster] = useState(true)
 
-  const [requestStatus, setRequestStatus] = useState<'idle' | 'loading' | 'pending' | 'success'>('loading')
+const [requestStatus, setRequestStatus] = useState<'idle' | 'loading' | 'pending' | 'success'>('loading')
 
+  // === COLE O NOVO CÓDIGO CORRIGIDO AQUI ===
+  useEffect(() => {
+    async function checkPendingRequest() {
+      if (!profile?.id) return
+      const { data } = await supabase
+        .from('support_requests')
+        .select('id')
+        .eq('user_id', profile.id)
+        .eq('status', 'pending')
+        .single()
+
+      setRequestStatus(data ? 'pending' : 'idle')
+    }
+    checkPendingRequest()
+  }, [profile])
+
+  const handleRequestReport = async () => {
+    if (!profile?.id) return
+    setRequestStatus('loading')
+    try {
+      const { error } = await supabase
+        .from('support_requests')
+        .insert([{ user_id: profile.id }])
+
+      if (error) throw error
+      setRequestStatus('success')
+      setTimeout(() => setRequestStatus('pending'), 2000)
+    } catch (error: any) {
+      if (error.code === '23505') {
+        setRequestStatus('pending')
+      } else {
+        alert('Erro ao solicitar relatório. Tente novamente.')
+        setRequestStatus('idle')
+      }
+    }
+  }
 
   // NOVO: Temporizador de 5 segundos
   useEffect(() => {
@@ -413,41 +449,4 @@ export default function Dashboard() {
 
     </div>
   )
-  useEffect(() => {
-    async function checkPendingRequest() {
-      if (!user) return
-      const { data } = await supabase
-        .from('support_requests')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('status', 'pending')
-        .single()
-
-      setRequestStatus(data ? 'pending' : 'idle')
-    }
-    checkPendingRequest()
-  }, [user])
-
-  // Função para fazer o pedido
-  const handleRequestReport = async () => {
-    if (!user) return
-    setRequestStatus('loading')
-    try {
-      const { error } = await supabase
-        .from('support_requests')
-        .insert([{ user_id: user.id }])
-
-      if (error) throw error
-      setRequestStatus('success')
-      setTimeout(() => setRequestStatus('pending'), 2000)
-    } catch (error: any) {
-      // Se der erro de duplicate key (tentou burlar o anti-spam), volta pra pending
-      if (error.code === '23505') {
-        setRequestStatus('pending')
-      } else {
-        alert('Erro ao solicitar relatório. Tente novamente.')
-        setRequestStatus('idle')
-      }
-    }
-  }
 }
