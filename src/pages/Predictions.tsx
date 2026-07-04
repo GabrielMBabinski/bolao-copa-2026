@@ -315,41 +315,39 @@ const deriveNextPhase = (previousPhaseMatches: any[]) => {
 };
 
 // --- COMPONENTE: ÁRVORE DO MATA-MATA (ESTILO FIFA) ---
+// --- COMPONENTE: ÁRVORE DO MATA-MATA (ESTILO FIFA) ---
 const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { allMatches: MatchWithTeams[], userPredictions: PredictionWithMatch[], onSave: any, timeOffset: number }) => {
   const [selectedMatch, setSelectedMatch] = useState<{ match: MatchWithTeams, pred: any } | null>(null)
-// 1. O ESTADO DA FASE FOCADA
-  const [focusedPhase, setFocusedPhase] = useState<string | null>(null)
+  
+  // 1. O ESTADO (Já começa nos 16-avos por padrão para evitar a tela cheia)
+  const [focusedPhase, setFocusedPhase] = useState<string | null>('round_32')
   const [autoFocusSet, setAutoFocusSet] = useState(false)
 
-  // 2. O DETETIVE DE FASES: Descobre qual fase a Copa está no momento
+  // 2. O DETETIVE DE FASES: Varre os jogos para descobrir qual fase focar
   useEffect(() => {
     if (allMatches.length === 0 || autoFocusSet) return;
-
     const knockoutMatches = allMatches.filter(m => m.phase !== 'group' && m.phase !== 'third_place');
     if (knockoutMatches.length > 0) {
       const phasesOrder = ['round_32', 'round_16', 'quarter', 'semi', 'final'];
-      let activePhase = 'final'; // Assume final, a menos que encontre jogos pendentes antes
-
+      let activePhase = 'round_32'; // Assume a primeira fase como padrão
       for (const phase of phasesOrder) {
         const phaseMatches = knockoutMatches.filter(m => m.phase === phase);
-        if (phaseMatches.length === 0) continue;
-
-        // Se houver qualquer jogo nesta fase que não tenha o status 'finished',
-        // significa que esta é a fase principal acontecendo agora.
-        if (phaseMatches.some(m => m.status !== 'finished')) {
+        // Se a fase tem jogos e PELO MENOS UM não terminou, essa é a fase atual!
+        if (phaseMatches.length > 0 && phaseMatches.some(m => m.status !== 'finished')) {
           activePhase = phase;
-          break;
+          break; // Achou a fase atual, para a busca
         }
       }
-      
       setFocusedPhase(activePhase);
-      setAutoFocusSet(true); // Evita que ele fique redefinindo o zoom se o usuário quiser mexer
+      setAutoFocusSet(true); // Trava o foco automático para o usuário poder mexer depois
     }
-  }, [allMatches, autoFocusSet]);  const getBracketSide = (match: MatchWithTeams) => {
+  }, [allMatches, autoFocusSet]);
+
+  const getBracketSide = (match: MatchWithTeams) => {
     if (match.phase === 'final' || match.phase === 'third_place') return 'center';
     if (!match.match_date) return 'right';
 
-    // AQUI: Usa a data fixa de Cuiabá para separar os lados perfeitamente
+    // Usando a data lógica de Cuiabá para não quebrar a árvore
     const dateStr = formatLogicDate(match.match_date);
     const leftBracketSchedule = [
       "28/06/2026", "29/06/2026|16:30", "29/06/2026|21:00", "30/06/2026|17:00",
@@ -415,7 +413,6 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
   const finalMatch = getPhaseMatches('final')[0]
   const thirdPlaceMatch = getPhaseMatches('third_place')[0]
 
-
   const isPhaseConfirmed = (left: MatchWithTeams[], right: MatchWithTeams[]) => {
     const all = [...left, ...right];
     if (all.length === 0) return false;
@@ -430,29 +427,24 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
   const phaseLevels: Record<string, number> = { round_32: 0, round_16: 1, quarter: 2, semi: 3, final: 4 };
 
   const isPhaseVisible = (phase: string) => {
-    // Se o usuário clicar em "Limpar Filtro", mostra a árvore inteira normalmente
     if (!focusedPhase) return true; 
-
-    // Calcula a diferença de níveis entre a fase atual do loop e a fase com Zoom
-    const diff = phaseLevels[phase] - phaseLevels[focusedPhase];
-
-    // Se o torneio já estiver na Final, mostra só ela.
-    if (focusedPhase === 'final') return diff === 0;
-
-    // O Segredo: Retorna "true" apenas para a Fase Principal (0) e a Próxima Fase (+1)
-    return diff === 0 || diff === 1;
+    const currentLevel = phaseLevels[phase];
+    const focusLevel = phaseLevels[focusedPhase];
+    // Desenha na tela apenas a fase atual e a próxima chave
+    return currentLevel === focusLevel || currentLevel === focusLevel + 1;
   };
 
   const BracketNode = ({ match }: { match: MatchWithTeams }) => {
     const pred: any = userPredictions.find(p => p.match_id === match.id)
     const realCurrentTime = new Date(new Date().getTime() + timeOffset)
-    // Limpamos o duplicate replace aqui
     const isLocked = match.match_date ? (normalizeDate(match.match_date) <= realCurrentTime || match.status !== 'pending') : false
     const isReady = match.home_team && match.away_team
     const isOfficial = match.id && !match.id.toString().startsWith('derived-')
     const canClick = isReady && isOfficial
 
     const isRealScore = match.home_score !== null && match.home_score !== undefined;
+    
+    // O display principal exibe o oficial (se houver) ou o palpite (se ainda não houver jogo)
     const displayHomeScore = isRealScore ? match.home_score : (pred?.home_score ?? '-');
     const displayAwayScore = isRealScore ? match.away_score : (pred?.away_score ?? '-');
 
@@ -474,6 +466,8 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
         <div className="text-[10px] text-muted-foreground mb-1 text-center border-b pb-1">
           {match.match_date ? formatDisplayDate(match.match_date).replace(',', ' -') : 'Aguardando Oficialização'}
         </div>
+        
+        {/* TIME DA CASA */}
         <div className="flex items-center justify-between py-1">
           <div className="flex items-center gap-2 overflow-hidden">
             {match.home_team?.flag_code ? <TeamFlag flagCode={match.home_team.flag_code} /> : <div className="w-5 h-4 bg-muted rounded"></div>}
@@ -482,10 +476,21 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
               {isHomePenalty && <span className="text-yellow-500 ml-1 font-black" title="Vence nos Pênaltis">★</span>}
             </span>
           </div>
-          <span className={`text-xs font-bold w-6 text-center rounded ${isRealScore ? 'bg-slate-700 text-white' : (pred ? 'bg-primary/20 text-primary' : 'bg-muted')}`}>
-            {displayHomeScore}
-          </span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* NOVO: Mini-placar mostrando o palpite antigo do usuário */}
+            {isRealScore && pred && (
+              <span className="text-[9px] font-bold text-primary/70 bg-primary/10 border border-primary/20 w-4 h-5 flex items-center justify-center rounded" title={`Seu palpite: ${pred.home_score}`}>
+                {pred.home_score}
+              </span>
+            )}
+            {/* Placar Principal (Oficial ou Palpite Ativo) */}
+            <span className={`text-xs font-bold w-6 h-5 flex items-center justify-center rounded ${isRealScore ? 'bg-slate-700 text-white' : (pred ? 'bg-primary/20 text-primary' : 'bg-muted')}`} title={isRealScore ? 'Resultado Oficial' : 'Seu Palpite'}>
+              {displayHomeScore}
+            </span>
+          </div>
         </div>
+
+        {/* TIME DE FORA */}
         <div className="flex items-center justify-between py-1">
           <div className="flex items-center gap-2 overflow-hidden">
             {match.away_team?.flag_code ? <TeamFlag flagCode={match.away_team.flag_code} /> : <div className="w-5 h-4 bg-muted rounded"></div>}
@@ -494,10 +499,21 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
               {isAwayPenalty && <span className="text-yellow-500 ml-1 font-black" title="Vence nos Pênaltis">★</span>}
             </span>
           </div>
-          <span className={`text-xs font-bold w-6 text-center rounded ${isRealScore ? 'bg-slate-700 text-white' : (pred ? 'bg-primary/20 text-primary' : 'bg-muted')}`}>
-            {displayAwayScore}
-          </span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* NOVO: Mini-placar mostrando o palpite antigo do usuário */}
+            {isRealScore && pred && (
+              <span className="text-[9px] font-bold text-primary/70 bg-primary/10 border border-primary/20 w-4 h-5 flex items-center justify-center rounded" title={`Seu palpite: ${pred.away_score}`}>
+                {pred.away_score}
+              </span>
+            )}
+            {/* Placar Principal (Oficial ou Palpite Ativo) */}
+            <span className={`text-xs font-bold w-6 h-5 flex items-center justify-center rounded ${isRealScore ? 'bg-slate-700 text-white' : (pred ? 'bg-primary/20 text-primary' : 'bg-muted')}`} title={isRealScore ? 'Resultado Oficial' : 'Seu Palpite'}>
+              {displayAwayScore}
+            </span>
+          </div>
         </div>
+        
+        {/* PONTUAÇÃO GANHA */}
         {match.status === 'finished' && pred && (
           <div className={`absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm ${pred.points_earned > 0 ? 'bg-green-500' : 'bg-gray-400'}`}>
             {pred.points_earned}
@@ -547,7 +563,7 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
           </Button>
         </div>
       )}
-      {/* ESQUERDA */}
+
       <div className="bg-muted/10 border border-dashed rounded-xl overflow-x-auto custom-scrollbar">
         <div className={`flex items-stretch min-w-max gap-8 px-8 pb-8 pt-4 transition-all duration-500 ${focusedPhase ? 'justify-center' : 'justify-between'}`}>
           <div className="flex gap-6 items-stretch">
@@ -581,7 +597,6 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
               )}
             </div>
           )}
-          {/* DIREITA */}
           <div className="flex flex-row-reverse gap-6 items-stretch">
             {isPhaseVisible('round_32') && <BracketColumn phase="round_32" matches={r32.right} isConfirmed={r32Confirmed} />}
             {isPhaseVisible('round_16') && <BracketColumn phase="round_16" matches={r16.right} isConfirmed={r16Confirmed} />}
