@@ -110,14 +110,17 @@ export default function Dashboard() {
     let csvContent = "Data,Partida,Placar Oficial,Seu Palpite,Pontos Ganhos\n"
 
     data.forEach((pred: any) => {
-      if (!pred.match || !pred.match.home_team) return
+      if (!pred.match || !pred.match.home_team) return 
 
       const date = new Date(pred.match.match_date).toLocaleDateString('pt-BR')
       const matchStr = `${pred.match.home_team.name} vs ${pred.match.away_team.name}`
       const officialScore = `'${pred.match.home_score} x ${pred.match.away_score}`
       const userScore = `'${pred.home_score} x ${pred.away_score}`
-
-      csvContent += `"${date}","${matchStr}",${officialScore},${userScore},${pred.points_earned}\n`
+      
+      // NOVA LÓGICA: Verifica se houve pênaltis no palpite
+      const penaltyInfo = pred.penalty_winner ? ` (Pênaltis: ${pred.penalty_winner})` : ""
+      
+      csvContent += `"${date}","${matchStr}",${officialScore},${userScore}${penaltyInfo},${pred.points_earned}\n`
     })
 
     // 3. Adiciona o Resumo no final do arquivo
