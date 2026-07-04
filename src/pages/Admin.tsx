@@ -66,7 +66,14 @@ export default function Admin() {
         .eq('match.status', 'finished')
 
       if (error) console.error(error)
-      setUserPredictions(data?.filter(p => p.match !== null) || [])
+
+      // Filtra os dados válidos e aplica a ordenação por data (Mais recente -> Mais antigo)
+      const validPredictions = data?.filter(p => p.match !== null) || []
+      const sortedPredictions = validPredictions.sort((a, b) =>
+        new Date(b.match.match_date).getTime() - new Date(a.match.match_date).getTime()
+      )
+
+      setUserPredictions(sortedPredictions)
       setLoadingPredictions(false)
     }
     loadPredictions()
