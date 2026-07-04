@@ -86,7 +86,16 @@ export default function Admin() {
     loadPredictions()
   }, [selectedUser])
 
-  // Função para exportar os dados para CSV
+  // Calcula a quantidade de cada tipo de acerto (Movi para cá para usar no CSV)
+  const stats = {
+    all: userPredictions.length,
+    exact: userPredictions.filter(p => p.points_earned === 5).length,
+    saldo: userPredictions.filter(p => p.points_earned === 3).length,
+    vencedor: userPredictions.filter(p => p.points_earned === 1).length,
+    erros: userPredictions.filter(p => p.points_earned === 0).length,
+  }
+
+  // Função para exportar os dados para CSV (Agora com Resumo)
   const exportToCSV = () => {
     if (!selectedUser || userPredictions.length === 0) return
 
@@ -102,6 +111,14 @@ export default function Admin() {
       csvContent += `"${date}","${matchStr}",${officialScore},${userScore},${points}\n`
     })
 
+    // Adiciona o Resumo de Desempenho no final da planilha
+    csvContent += `\n"RESUMO DE DESEMPENHO"\n`
+    csvContent += `"Placar Exato (5 pts)",${stats.exact}\n`
+    csvContent += `"Saldo/Empate (3 pts)",${stats.saldo}\n`
+    csvContent += `"Vencedor (1 pt)",${stats.vencedor}\n`
+    csvContent += `"Erros (0 pts)",${stats.erros}\n`
+    csvContent += `"Total de Palpites",${stats.all}\n`
+
     const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
@@ -116,15 +133,6 @@ export default function Admin() {
   const filteredPredictions = userPredictions.filter(p => 
     pointFilter === 'all' ? true : p.points_earned === pointFilter
   )
-
-  // Calcula a quantidade de cada tipo de acerto
-  const stats = {
-    all: userPredictions.length,
-    exact: userPredictions.filter(p => p.points_earned === 5).length,
-    saldo: userPredictions.filter(p => p.points_earned === 3).length,
-    vencedor: userPredictions.filter(p => p.points_earned === 1).length,
-    erros: userPredictions.filter(p => p.points_earned === 0).length,
-  }
 
   const getPointsIcon = (points: number) => {
     if (points >= 5) return <Target className="w-5 h-5 text-green-500" />
@@ -185,7 +193,6 @@ export default function Admin() {
           </Button>
 
           <Card>
-            {/* O BOTÃO DE DOWNLOAD ESTÁ AQUI NESTE HEADER */}
             <CardHeader className="flex flex-row items-start justify-between">
               <div>
                 <CardTitle className="flex items-center gap-2">
@@ -199,7 +206,6 @@ export default function Admin() {
             </CardHeader>
             
             <CardContent>
-              {/* BOTÕES COM OS CONTADORES DINÂMICOS */}
               <div className="flex flex-wrap gap-2 mb-6 p-4 bg-muted/30 rounded-lg">
                 <Button variant={pointFilter === 'all' ? 'default' : 'outline'} size="sm" onClick={() => setPointFilter('all')}>
                   Todos ({stats.all})
