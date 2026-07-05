@@ -11,44 +11,26 @@ import UserAvatar from '@/components/UserAvatar'
 import { Button } from '@/components/ui/button'
 
 // FUNÇÃO QUE BUSCA TUDO DE UMA VEZ
-// FUNÇÃO QUE BUSCA TUDO DE UMA VEZ
 const fetchDashboardData = async () => {
-  const [up, fin, users, teamsRes, knockoutsRes] = await Promise.all([
+  const [up, fin, users, teamsRes] = await Promise.all([
     matches.getUpcoming(3),
     matches.getFinished(5),
     profiles.getAllProfiles(),
-    // Busca todos os times ordenados pelo Elo
-    supabase.from('teams').select('id, name, flag_code, elo_rating').order('elo_rating', { ascending: false }),
-    // Busca apenas jogos finalizados do mata-mata
-    supabase.from('matches').select('home_team_id, away_team_id, home_score, away_score, penalty_winner')
-      .in('phase', ['round_32', 'round_16', 'quarter', 'semi', 'final'])
-      .eq('status', 'finished')
+
+    // O banco faz todo o trabalho duro! Só pedimos os top 5 times que NÃO estão eliminados
+    supabase
+      .from('teams')
+      .select('id, name, flag_code, elo_rating, is_eliminated')
+      .order('is_eliminated', { ascending: true }) // 1º REGRA: Vivos (false) vêm antes dos Eliminados (true)
+      .order('elo_rating', { ascending: false })   // 2º REGRA: Quem tem a maior pontuação vem primeiro
+      .limit(10)
   ])
-
-  // Lógica para encontrar quem já foi eliminado
-  const knockouts = knockoutsRes.data || []
-  const eliminatedIds = new Set()
-
-  knockouts.forEach(match => {
-    // Se o time da casa ganhou, o visitante está eliminado (e vice-versa)
-    if (match.home_score > match.away_score) eliminatedIds.add(match.away_team_id)
-    else if (match.home_score < match.away_score) eliminatedIds.add(match.home_team_id)
-    else {
-      // Se empatou, verifica quem venceu nos pênaltis
-      if (match.penalty_winner === 'home') eliminatedIds.add(match.away_team_id)
-      if (match.penalty_winner === 'away') eliminatedIds.add(match.home_team_id)
-    }
-  })
-
-  // Filtra as seleções removendo as eliminadas e pega apenas as 5 melhores
-  const allTeams = teamsRes.data || []
-  const activeTopTeams = allTeams.filter(t => !eliminatedIds.has(t.id)).slice(0, 5)
 
   return {
     upcoming: up.data || [],
     finished: fin.data || [],
     users: users.data || [],
-    topTeams: activeTopTeams // Novo dado retornado!
+    topTeams: teamsRes.data || [] // Limpo, rápido e seguro!
   }
 }
 
@@ -414,7 +396,7 @@ export default function Dashboard() {
             <CardTitle className="flex items-center gap-2 text-lg sm:text-xl text-blue-500">
               <TrendingUp className="h-5 w-5" /> Termômetro da Copa
             </CardTitle>
-            <CardDescription>Seleções ativas com maior Força (Elo)</CardDescription>
+            <CardDescription>Ranking da Copa</CardDescription>
           </CardHeader>
           <CardContent className="flex-1">
             {topTeams.length === 0 ? (
@@ -425,8 +407,13 @@ export default function Dashboard() {
             ) : (
               <div className="space-y-3">
                 {topTeams.map((team, index) => (
-                  <div key={team.id} className="flex items-center justify-between p-3 border rounded-lg bg-card/50 hover:bg-muted/50 transition-colors">
-                    <div className="flex items-center gap-3">
+                  <div
+                    key={team.id}
+                    className={`flex items-center justify-between p-3 border rounded-lg transition-colors ${team.is_eliminated
+                        ? 'bg-card/30 opacity-50 grayscale' // Visual apagado para eliminados
+                        : 'bg-card/50 hover:bg-muted/50'    // Visual normal para times vivos
+                      }`}
+                  >                    <div className="flex items-center gap-3">
                       <span className={`font-black w-4 text-center ${index === 0 ? 'text-yellow-500' : index === 1 ? 'text-slate-400' : index === 2 ? 'text-amber-600' : 'text-muted-foreground'}`}>
                         {index + 1}º
                       </span>
