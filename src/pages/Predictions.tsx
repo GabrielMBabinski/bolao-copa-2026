@@ -252,24 +252,33 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', ini
   // Corrige a checagem usando normalizeDate diretamente
   const isLocked = match.match_date ? (normalizeDate(match.match_date) <= realCurrentTime || match.status !== 'pending') : false
 
-  // Função para calcular a probabilidade baseada no algoritmo Elo
+  // Função para calcular Vitória, Empate e Derrota baseada no Elo
   const calculateWinProbability = (ratingA?: number, ratingB?: number) => {
-    // Se o time não tiver rating carregado, assume o padrão de 1500
     const rA = ratingA || 1500;
     const rB = ratingB || 1500;
+    const diff = rA - rB;
 
-    // Fórmula padrão do Elo
-    const expectedA = 1 / (1 + Math.pow(10, (rB - rA) / 400));
-    const expectedB = 1 - expectedA;
+    // 1. Calcula a Expectativa Padrão do Elo
+    const expectedA = 1 / (1 + Math.pow(10, -diff / 400));
 
-    return {
-      homeProb: Math.round(expectedA * 100),
-      awayProb: Math.round(expectedB * 100)
-    };
+    // 2. Calcula a chance de empate (Máximo de 25% caindo conforme a diferença aumenta)
+    const drawProbDecimal = 0.25 * Math.exp(-0.5 * Math.pow(diff / 200, 2));
+
+    // 3. Subtrai metade do empate da chance de vitória de cada um
+    const homeProbDecimal = expectedA - (drawProbDecimal / 2);
+
+    // Converte para porcentagem arredondada
+    const drawProb = Math.max(0, Math.round(drawProbDecimal * 100));
+    const homeProb = Math.max(0, Math.round(homeProbDecimal * 100));
+
+    // Garante que a soma seja sempre exatamente 100%
+    const awayProb = 100 - homeProb - drawProb;
+
+    return { homeProb, drawProb, awayProb };
   };
 
-  // Pega as probabilidades para os times da partida atual
-  const { homeProb, awayProb } = calculateWinProbability(
+  // Uso da função:
+  const { homeProb, drawProb, awayProb } = calculateWinProbability(
     match.home_team?.elo_rating,
     match.away_team?.elo_rating
   );
@@ -284,47 +293,73 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', ini
       </div>
 
       <div className="flex flex-col items-center gap-4">
+
+        {/* BLOCO DOS TIMES */}
         <div className="flex items-center justify-center gap-6 w-full">
-          
+
           {/* TIME MANDANTE */}
-          <div 
+          <div
             className={`flex flex-col items-center gap-1.5 flex-1 ${match.home_team ? 'cursor-pointer hover:scale-105 transition-transform hover:bg-muted/30 p-2 rounded-xl' : ''}`}
             onClick={() => match.home_team && fetchTeamHistory(match.home_team.id)}
           >
             {match.home_team?.flag_code ? <TeamFlag flagCode={match.home_team.flag_code} /> : <div className="w-8 h-6 bg-muted rounded"></div>}
             <div className="flex flex-col items-center w-full">
               <span className="font-bold text-sm text-center truncate w-full">{match.home_team?.name || 'A Definir'}</span>
-              
-              {/* TAG DE PROBABILIDADE (MANDANTE) */}
-              {match.home_team && match.away_team && (
-                <span className="mt-1 text-[10px] font-medium tracking-wide text-muted-foreground border border-muted/50 bg-background/50 px-2 py-0.5 rounded-full shadow-sm">
-                  {homeProb}% chance
-                </span>
-              )}
+              {/* As tags antigas foram removidas daqui para não poluir o visual */}
             </div>
           </div>
 
           <span className="text-xl font-black text-muted-foreground">X</span>
-          
+
           {/* TIME VISITANTE */}
-          <div 
+          <div
             className={`flex flex-col items-center gap-1.5 flex-1 ${match.away_team ? 'cursor-pointer hover:scale-105 transition-transform hover:bg-muted/30 p-2 rounded-xl' : ''}`}
             onClick={() => match.away_team && fetchTeamHistory(match.away_team.id)}
           >
             {match.away_team?.flag_code ? <TeamFlag flagCode={match.away_team.flag_code} /> : <div className="w-8 h-6 bg-muted rounded"></div>}
             <div className="flex flex-col items-center w-full">
               <span className="font-bold text-sm text-center truncate w-full">{match.away_team?.name || 'A Definir'}</span>
-              
-              {/* TAG DE PROBABILIDADE (VISITANTE) */}
-              {match.home_team && match.away_team && (
-                <span className="mt-1 text-[10px] font-medium tracking-wide text-muted-foreground border border-muted/50 bg-background/50 px-2 py-0.5 rounded-full shadow-sm">
-                  {awayProb}% chance
-                </span>
-              )}
+              {/* As tags antigas foram removidas daqui para não poluir o visual */}
             </div>
           </div>
 
         </div>
+        {/* FIM DO BLOCO DOS TIMES */}
+
+        {/* NOVA BARRA DE PROBABILIDADE (ESTILO GOOGLE) ADICIONADA AQUI */}
+        {match.home_team && match.away_team && (
+          <div className="w-full max-w-sm flex flex-col gap-3 mt-2 mb-4 animate-in fade-in">
+            <p className="text-[10px] font-bold text-muted-foreground text-center uppercase tracking-wider">
+              Probabilidade de Vitória (90 Min)
+            </p>
+
+            <div className="flex justify-between text-xs font-semibold px-1">
+              <div className="flex flex-col items-start w-[33%]">
+                <span className="truncate w-full text-left">{match.home_team.name}</span>
+                <span className="text-blue-400 font-black">{homeProb}%</span>
+              </div>
+
+              <div className="flex flex-col items-center w-[34%] text-muted-foreground">
+                <span>Empate</span>
+                <span className="font-bold">{drawProb}%</span>
+              </div>
+
+              <div className="flex flex-col items-end w-[33%]">
+                <span className="truncate w-full text-right">{match.away_team.name}</span>
+                <span className="text-red-400 font-black">{awayProb}%</span>
+              </div>
+            </div>
+
+            <div className="w-full h-1.5 flex rounded-full overflow-hidden gap-[2px] bg-background">
+              <div style={{ width: `${homeProb}%` }} className="bg-blue-500 transition-all duration-1000 ease-out"></div>
+              <div style={{ width: `${drawProb}%` }} className="bg-muted-foreground/40 transition-all duration-1000 ease-out"></div>
+              <div style={{ width: `${awayProb}%` }} className="bg-red-500 transition-all duration-1000 ease-out"></div>
+            </div>
+          </div>
+        )}
+
+        {/* O RESTANTE DO SEU CÓDIGO VEM AQUI ABAIXO: */}
+        {/* {!isLocked && match.home_team && match.away_team ? ( <form onSubmit={handleSubmit} ... */}
 
         {!isLocked && match.home_team && match.away_team ? (
           <form onSubmit={handleSubmit} className="w-full max-w-xs flex flex-col gap-4">
