@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Target, Clock, Lock, Check, Users, X, GitMerge } from 'lucide-react'
+import { Target, Clock, Lock, Check, Users, X, GitMerge, History } from 'lucide-react'
 import TeamFlag from '@/components/TeamFlag'
 
 // --- FUNÇÕES AUXILIARES (BLINDADAS CONTRA NULL E SAFARI) ---
@@ -179,6 +179,44 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', ini
   const isKnockout = match.phase !== 'group'
   const isTie = homeScore !== '' && awayScore !== '' && Number(homeScore) === Number(awayScore)
 
+  const [activeTeamId, setActiveTeamId] = useState<string | null>(null)
+  const [teamHistory, setTeamHistory] = useState<any[]>([])
+  const [loadingHistory, setLoadingHistory] = useState(false)
+
+  const fetchTeamHistory = async (teamId: string) => {
+    // Se clicar no mesmo time que já está aberto, ele fecha o histórico
+    if (activeTeamId === teamId) {
+      setActiveTeamId(null)
+      setTeamHistory([])
+      return
+    }
+
+    setActiveTeamId(teamId)
+    setLoadingHistory(true)
+
+    try {
+      const { data, error } = await supabase
+        .from('matches')
+        .select(`
+        id, home_score, away_score, match_date, phase, status,
+        home_team:teams!matches_home_team_id_fkey(name, flag_code),
+        away_team:teams!matches_away_team_id_fkey(name, flag_code)
+      `)
+        // A mágica acontece aqui: busca jogos onde o time é mandante OU visitante
+        .or(`home_team_id.eq.${teamId},away_team_id.eq.${teamId}`)
+        .eq('status', 'finished')
+        .order('match_date', { ascending: false }) // Do mais recente para o mais antigo
+        .limit(5) // Pega apenas os últimos 5 jogos para não poluir a tela
+
+      if (error) throw error
+      setTeamHistory(data || [])
+    } catch (error) {
+      console.error('Erro ao buscar histórico:', error)
+    } finally {
+      setLoadingHistory(false)
+    }
+  }
+
   useEffect(() => {
     if (!isTie) setPenaltyWinner(null)
   }, [homeScore, awayScore, isTie])
@@ -214,6 +252,28 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', ini
   // Corrige a checagem usando normalizeDate diretamente
   const isLocked = match.match_date ? (normalizeDate(match.match_date) <= realCurrentTime || match.status !== 'pending') : false
 
+  // Função para calcular a probabilidade baseada no algoritmo Elo
+  const calculateWinProbability = (ratingA?: number, ratingB?: number) => {
+    // Se o time não tiver rating carregado, assume o padrão de 1500
+    const rA = ratingA || 1500;
+    const rB = ratingB || 1500;
+
+    // Fórmula padrão do Elo
+    const expectedA = 1 / (1 + Math.pow(10, (rB - rA) / 400));
+    const expectedB = 1 - expectedA;
+
+    return {
+      homeProb: Math.round(expectedA * 100),
+      awayProb: Math.round(expectedB * 100)
+    };
+  };
+
+  // Pega as probabilidades para os times da partida atual
+  const { homeProb, awayProb } = calculateWinProbability(
+    match.home_team?.elo_rating,
+    match.away_team?.elo_rating
+  );
+
   return (
     <div className={`p-4 border rounded-xl flex flex-col gap-6 ${isLocked ? 'opacity-80 bg-muted/10' : 'bg-card shadow-sm'}`}>
       <div className="flex items-center justify-between border-b pb-3">
@@ -225,15 +285,45 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', ini
 
       <div className="flex flex-col items-center gap-4">
         <div className="flex items-center justify-center gap-6 w-full">
-          <div className="flex flex-col items-center gap-2 flex-1">
+          
+          {/* TIME MANDANTE */}
+          <div 
+            className={`flex flex-col items-center gap-1.5 flex-1 ${match.home_team ? 'cursor-pointer hover:scale-105 transition-transform hover:bg-muted/30 p-2 rounded-xl' : ''}`}
+            onClick={() => match.home_team && fetchTeamHistory(match.home_team.id)}
+          >
             {match.home_team?.flag_code ? <TeamFlag flagCode={match.home_team.flag_code} /> : <div className="w-8 h-6 bg-muted rounded"></div>}
-            <span className="font-bold text-sm text-center truncate w-full">{match.home_team?.name || 'A Definir'}</span>
+            <div className="flex flex-col items-center w-full">
+              <span className="font-bold text-sm text-center truncate w-full">{match.home_team?.name || 'A Definir'}</span>
+              
+              {/* TAG DE PROBABILIDADE (MANDANTE) */}
+              {match.home_team && match.away_team && (
+                <span className="mt-1 text-[10px] font-medium tracking-wide text-muted-foreground border border-muted/50 bg-background/50 px-2 py-0.5 rounded-full shadow-sm">
+                  {homeProb}% chance
+                </span>
+              )}
+            </div>
           </div>
+
           <span className="text-xl font-black text-muted-foreground">X</span>
-          <div className="flex flex-col items-center gap-2 flex-1">
+          
+          {/* TIME VISITANTE */}
+          <div 
+            className={`flex flex-col items-center gap-1.5 flex-1 ${match.away_team ? 'cursor-pointer hover:scale-105 transition-transform hover:bg-muted/30 p-2 rounded-xl' : ''}`}
+            onClick={() => match.away_team && fetchTeamHistory(match.away_team.id)}
+          >
             {match.away_team?.flag_code ? <TeamFlag flagCode={match.away_team.flag_code} /> : <div className="w-8 h-6 bg-muted rounded"></div>}
-            <span className="font-bold text-sm text-center truncate w-full">{match.away_team?.name || 'A Definir'}</span>
+            <div className="flex flex-col items-center w-full">
+              <span className="font-bold text-sm text-center truncate w-full">{match.away_team?.name || 'A Definir'}</span>
+              
+              {/* TAG DE PROBABILIDADE (VISITANTE) */}
+              {match.home_team && match.away_team && (
+                <span className="mt-1 text-[10px] font-medium tracking-wide text-muted-foreground border border-muted/50 bg-background/50 px-2 py-0.5 rounded-full shadow-sm">
+                  {awayProb}% chance
+                </span>
+              )}
+            </div>
           </div>
+
         </div>
 
         {!isLocked && match.home_team && match.away_team ? (
@@ -258,6 +348,63 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', ini
               </div>
             )}
 
+            {/* SEÇÃO DE HISTÓRICO EXPANSÍVEL ADICIONADA AQUI */}
+            {activeTeamId && (
+              <div className="p-3 bg-muted/20 border border-muted rounded-lg animate-in slide-in-from-top-2">
+                <div className="flex items-center justify-between mb-3 border-b border-muted pb-2">
+                  <h4 className="text-sm font-semibold flex items-center gap-2">
+                    <History className="w-4 h-4 text-primary" />
+                    Últimos Jogos
+                  </h4>
+                  {/* Importante ter type="button" para não enviar o form ao fechar */}
+                  <button type="button" onClick={() => setActiveTeamId(null)} className="text-muted-foreground hover:text-white">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {loadingHistory ? (
+                  <p className="text-xs text-center text-muted-foreground py-4 animate-pulse">Buscando histórico...</p>
+                ) : teamHistory.length === 0 ? (
+                  <p className="text-xs text-center text-muted-foreground py-4">Nenhum jogo finalizado encontrado.</p>
+                ) : (
+                  <div className="space-y-2 max-h-[150px] overflow-y-auto pr-1 no-scrollbar">
+                    {teamHistory.map((pastMatch) => {
+                      return (
+                        <div key={pastMatch.id} className="flex items-center justify-between bg-background p-2 rounded text-xs border border-muted/50">
+
+                          {/* TIME MANDANTE (Esquerda) */}
+                          <div className="w-[42%] flex items-center justify-end gap-2">
+                            <span className="font-medium truncate text-right">
+                              {pastMatch.home_team.name}
+                            </span>
+                            <div className="w-5 h-4 flex-shrink-0 rounded-[2px] overflow-hidden flex items-center justify-center">
+                              <TeamFlag flagCode={pastMatch.home_team.flag_code} />
+                            </div>
+                          </div>
+
+                          {/* PLACAR (Centro) */}
+                          <span className="w-[16%] text-center font-black bg-muted/50 rounded px-1 py-0.5">
+                            {pastMatch.home_score} x {pastMatch.away_score}
+                          </span>
+
+                          {/* TIME VISITANTE (Direita) */}
+                          <div className="w-[42%] flex items-center justify-start gap-2">
+                            <div className="w-5 h-4 flex-shrink-0 rounded-[2px] overflow-hidden flex items-center justify-center">
+                              <TeamFlag flagCode={pastMatch.away_team.flag_code} />
+                            </div>
+                            <span className="font-medium truncate text-left">
+                              {pastMatch.away_team.name}
+                            </span>
+                          </div>
+
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
             <Button type="submit" disabled={saving || justSaved} className={`w-full h-12 text-base font-bold ${justSaved ? 'bg-green-600 hover:bg-green-700' : ''}`}>
               {saving ? 'Salvando...' : justSaved ? 'Salvo! ✅' : predictionId ? 'Atualizar Palpite' : 'Confirmar Palpite'}
             </Button>
@@ -267,20 +414,22 @@ const PredictionForm = ({ match, onSave, initialHome = '', initialAway = '', ini
         ) : null}
       </div>
 
-      {isLocked && (
-        <FriendsPredictionsList
-          matchId={match.id}
-          matchDate={match.match_date}
-          timeOffset={timeOffset}
-          isFinished={match.status === 'finished'} // Declarado explicitamente para não quebrar!
-          actualHomeScore={match.home_score}
-          actualAwayScore={match.away_score}
-          actualPenaltyWinner={match.penalty_winner}
-          homeTeamName={match.home_team?.name}
-          awayTeamName={match.away_team?.name}
-        />
-      )}
-    </div>
+      {
+        isLocked && (
+          <FriendsPredictionsList
+            matchId={match.id}
+            matchDate={match.match_date}
+            timeOffset={timeOffset}
+            isFinished={match.status === 'finished'} // Declarado explicitamente para não quebrar!
+            actualHomeScore={match.home_score}
+            actualAwayScore={match.away_score}
+            actualPenaltyWinner={match.penalty_winner}
+            homeTeamName={match.home_team?.name}
+            awayTeamName={match.away_team?.name}
+          />
+        )
+      }
+    </div >
   )
 }
 
@@ -318,7 +467,7 @@ const deriveNextPhase = (previousPhaseMatches: any[]) => {
 // --- COMPONENTE: ÁRVORE DO MATA-MATA (ESTILO FIFA) ---
 const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { allMatches: MatchWithTeams[], userPredictions: PredictionWithMatch[], onSave: any, timeOffset: number }) => {
   const [selectedMatch, setSelectedMatch] = useState<{ match: MatchWithTeams, pred: any } | null>(null)
-  
+
   // 1. O ESTADO (Já começa nos 16-avos por padrão para evitar a tela cheia)
   const [focusedPhase, setFocusedPhase] = useState<string | null>('round_32')
   const [autoFocusSet, setAutoFocusSet] = useState(false)
@@ -427,7 +576,7 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
   const phaseLevels: Record<string, number> = { round_32: 0, round_16: 1, quarter: 2, semi: 3, final: 4 };
 
   const isPhaseVisible = (phase: string) => {
-    if (!focusedPhase) return true; 
+    if (!focusedPhase) return true;
     const currentLevel = phaseLevels[phase];
     const focusLevel = phaseLevels[focusedPhase];
     // Desenha na tela apenas a fase atual e a próxima chave
@@ -443,7 +592,7 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
     const canClick = isReady && isOfficial
 
     const isRealScore = match.home_score !== null && match.home_score !== undefined;
-    
+
     // O display principal exibe o oficial (se houver) ou o palpite (se ainda não houver jogo)
     const displayHomeScore = isRealScore ? match.home_score : (pred?.home_score ?? '-');
     const displayAwayScore = isRealScore ? match.away_score : (pred?.away_score ?? '-');
@@ -466,7 +615,7 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
         <div className="text-[10px] text-muted-foreground mb-1 text-center border-b pb-1">
           {match.match_date ? formatDisplayDate(match.match_date).replace(',', ' -') : 'Aguardando Oficialização'}
         </div>
-        
+
         {/* TIME DA CASA */}
         <div className="flex items-center justify-between py-1">
           <div className="flex items-center gap-2 overflow-hidden">
@@ -512,7 +661,7 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
             </span>
           </div>
         </div>
-        
+
         {/* PONTUAÇÃO GANHA */}
         {match.status === 'finished' && pred && (
           <div className={`absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm ${pred.points_earned > 0 ? 'bg-green-500' : 'bg-gray-400'}`}>
