@@ -5,22 +5,50 @@ import { matches, profiles, supabase } from '@/lib/supabaseClient'
 import type { MatchWithTeams } from '@/types/database'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Calendar, Clock, Trophy, BadgeDollarSign, CheckCircle2, ChevronDown, XCircle, FileText } from 'lucide-react'
+import { Calendar, Clock, Trophy, BadgeDollarSign, CheckCircle2, ChevronDown, XCircle, TrendingUp, FileText } from 'lucide-react'
 import TeamFlag from '@/components/TeamFlag'
 import UserAvatar from '@/components/UserAvatar'
 import { Button } from '@/components/ui/button'
 
 // FUNÇÃO QUE BUSCA TUDO DE UMA VEZ
+// FUNÇÃO QUE BUSCA TUDO DE UMA VEZ
 const fetchDashboardData = async () => {
-  const [up, fin, users] = await Promise.all([
+  const [up, fin, users, teamsRes, knockoutsRes] = await Promise.all([
     matches.getUpcoming(3),
     matches.getFinished(5),
-    profiles.getAllProfiles()
+    profiles.getAllProfiles(),
+    // Busca todos os times ordenados pelo Elo
+    supabase.from('teams').select('id, name, flag_code, elo_rating').order('elo_rating', { ascending: false }),
+    // Busca apenas jogos finalizados do mata-mata
+    supabase.from('matches').select('home_team_id, away_team_id, home_score, away_score, penalty_winner')
+      .in('phase', ['round_32', 'round_16', 'quarter', 'semi', 'final'])
+      .eq('status', 'finished')
   ])
+
+  // Lógica para encontrar quem já foi eliminado
+  const knockouts = knockoutsRes.data || []
+  const eliminatedIds = new Set()
+
+  knockouts.forEach(match => {
+    // Se o time da casa ganhou, o visitante está eliminado (e vice-versa)
+    if (match.home_score > match.away_score) eliminatedIds.add(match.away_team_id)
+    else if (match.home_score < match.away_score) eliminatedIds.add(match.home_team_id)
+    else {
+      // Se empatou, verifica quem venceu nos pênaltis
+      if (match.penalty_winner === 'home') eliminatedIds.add(match.away_team_id)
+      if (match.penalty_winner === 'away') eliminatedIds.add(match.home_team_id)
+    }
+  })
+
+  // Filtra as seleções removendo as eliminadas e pega apenas as 5 melhores
+  const allTeams = teamsRes.data || []
+  const activeTopTeams = allTeams.filter(t => !eliminatedIds.has(t.id)).slice(0, 5)
+
   return {
     upcoming: up.data || [],
     finished: fin.data || [],
-    users: users.data || []
+    users: users.data || [],
+    topTeams: activeTopTeams // Novo dado retornado!
   }
 }
 
@@ -110,18 +138,18 @@ export default function Dashboard() {
     let csvContent = "Data,Partida,Placar Oficial,Seu Palpite,Pontos Ganhos\n"
 
     data.forEach((pred: any) => {
-      if (!pred.match || !pred.match.home_team) return 
+      if (!pred.match || !pred.match.home_team) return
 
       const date = new Date(pred.match.match_date).toLocaleDateString('pt-BR')
       const matchStr = `${pred.match.home_team.name} vs ${pred.match.away_team.name}`
       const officialScore = `'${pred.match.home_score} x ${pred.match.away_score}`
       const userScore = `'${pred.home_score} x ${pred.away_score}`
-      
+
       // Lógica de Pênaltis
       const pWinner = pred.penalty_winner;
       const penaltyName = pWinner === 'home' ? pred.match.home_team.name : pWinner === 'away' ? pred.match.away_team.name : null;
       const penaltyInfo = penaltyName ? ` (Pênaltis: ${penaltyName})` : ""
-      
+
       csvContent += `"${date}","${matchStr}",${officialScore},${userScore}${penaltyInfo},${pred.points_earned}\n`
     })
 
@@ -164,6 +192,7 @@ export default function Dashboard() {
   const upcomingMatches = data?.upcoming || []
   const finishedMatches = data?.finished || []
   const allUsers = data?.users || []
+  const topTeams = data?.topTeams || []
   const loading = isLoading
 
   useEffect(() => {
@@ -267,13 +296,15 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-3">
+
+        {/* CARD: AO VIVO & PRÓXIMAS (O seu card atual) */}
         <Card className="flex flex-col border-primary/20">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
               <Calendar className="h-5 w-5 text-primary" /> Ao Vivo & Próximas
             </CardTitle>
-            <CardDescription>Partidas rolando agora e dos próximos 3 dias</CardDescription>
+            <CardDescription>Partidas rolando agora e dos próximos dias</CardDescription>
           </CardHeader>
           <CardContent className="flex-1">
             {upcomingMatches.length === 0 ? (
@@ -372,6 +403,41 @@ export default function Dashboard() {
                         <span className="font-medium text-xs sm:text-sm text-center mt-1 truncate max-w-[80px] sm:max-w-[120px]">{match.away_team.name}</span>
                       </div>
                     </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+        <Card className="flex flex-col border-blue-500/20 bg-gradient-to-br from-blue-500/5 to-transparent">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg sm:text-xl text-blue-500">
+              <TrendingUp className="h-5 w-5" /> Termômetro da Copa
+            </CardTitle>
+            <CardDescription>Seleções ativas com maior Força (Elo)</CardDescription>
+          </CardHeader>
+          <CardContent className="flex-1">
+            {topTeams.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full min-h-[200px] text-muted-foreground bg-muted/20 rounded-lg border border-dashed">
+                <TrendingUp className="h-10 w-10 mb-2 opacity-50" />
+                <p className="text-sm">Calculando ranking...</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {topTeams.map((team, index) => (
+                  <div key={team.id} className="flex items-center justify-between p-3 border rounded-lg bg-card/50 hover:bg-muted/50 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <span className={`font-black w-4 text-center ${index === 0 ? 'text-yellow-500' : index === 1 ? 'text-slate-400' : index === 2 ? 'text-amber-600' : 'text-muted-foreground'}`}>
+                        {index + 1}º
+                      </span>
+                      <div className="w-6 h-5 flex items-center justify-center rounded-[2px] overflow-hidden">
+                        <TeamFlag flagCode={team.flag_code} />
+                      </div>
+                      <span className="font-bold text-sm truncate max-w-[120px]">{team.name}</span>
+                    </div>
+                    <Badge variant="outline" className="font-mono bg-background">
+                      {Math.round(team.elo_rating || 1500)} pts
+                    </Badge>
                   </div>
                 ))}
               </div>
