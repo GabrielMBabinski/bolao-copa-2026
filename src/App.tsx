@@ -8,6 +8,40 @@ import Predictions from './pages/Predictions'
 import Ranking from './pages/Ranking'
 import Admin from './pages/Admin'
 import Profile from './pages/Profile'
+import { useEffect } from 'react';
+import { supabase } from '@/lib/supabaseClient';
+import { useNavigate } from 'react-router-dom';
+
+export default function Home() {
+  const navigate = useNavigate();
+
+  // O LEÃO DE CHÁCARA: Roda toda vez que a página inicial é aberta
+  useEffect(() => {
+    const checkBannedStatus = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('block_message')
+          .eq('id', user.id)
+          .single();
+
+        // Se o leão de chácara ver que ele está bloqueado...
+        if (profile?.block_message) {
+          // 1. Rasga a credencial dele (desloga do navegador na hora)
+          await supabase.auth.signOut();
+          
+          // 2. Chuta ele de volta pra porta de entrada
+          navigate('/login'); // (ou window.location.href = '/login' se não tiver o navigate)
+        }
+      }
+    };
+
+    checkBannedStatus();
+  }, []);
+
+  // ... resto do código da sua Home ...
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
