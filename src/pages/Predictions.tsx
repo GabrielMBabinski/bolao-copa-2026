@@ -791,15 +791,21 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
       </div>
 
       {selectedMatch && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="relative w-full max-w-lg bg-background rounded-xl shadow-2xl overflow-hidden">
-            <div className="flex justify-between items-center p-4 border-b bg-muted/30">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 sm:p-6 animate-in fade-in duration-200">
+
+          {/* 1 e 2. Adicionado max-h-[90vh] e flex flex-col */}
+          <div className="relative w-full max-w-lg bg-background rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+
+            {/* O shrink-0 garante que este cabeçalho nunca seja esmagado pelo conteúdo */}
+            <div className="flex justify-between items-center p-4 border-b bg-muted/30 shrink-0">
               <h3 className="font-bold text-lg">Palpite do Mata-Mata</h3>
               <Button variant="ghost" size="icon" onClick={() => setSelectedMatch(null)} className="h-8 w-8 rounded-full hover:bg-destructive/10 hover:text-destructive">
                 <X className="h-5 w-5" />
               </Button>
             </div>
-            <div className="p-4">
+
+            {/* 3. Adicionado overflow-y-auto para permitir rolagem apenas aqui dentro */}
+            <div className="p-4 overflow-y-auto no-scrollbar">
               <PredictionForm
                 match={selectedMatch.match}
                 initialHome={selectedMatch.pred?.home_score}
@@ -811,6 +817,7 @@ const KnockoutBracket = ({ allMatches, userPredictions, onSave, timeOffset }: { 
                 onSavedCallback={() => setSelectedMatch(null)}
               />
             </div>
+
           </div>
         </div>
       )}
