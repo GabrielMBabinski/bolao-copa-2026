@@ -12,51 +12,62 @@ import { useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  // Puxamos o profile que já vem do seu hook
+  // Puxamos o profile do cache do seu hook (sem fazer nova requisição)
   const { user, loading, profile } = useAuth();
   const navigate = useNavigate();
 
-  // O LEÃO DE CHÁCARA: Roda em TODAS as páginas protegidas
+  // O LEÃO DE CHÁCARA VIA SATÉLITE (Supabase Realtime)
   useEffect(() => {
-    const kickBannedUser = async () => {
-      if (profile?.block_message) {
-        // 1. Rasga a credencial dele (desloga do navegador na hora)
-        await supabase.auth.signOut();
-        
-        // 2. Chuta ele de volta pra porta de entrada (sua rota é /auth)
-        navigate('/auth'); 
-      }
-    };
+    if (!user) return;
 
-    if (profile) {
-      kickBannedUser();
+    // 1. Verifica se no cache ele já constava como bloqueado
+    if (profile?.block_message) {
+      supabase.auth.signOut().then(() => navigate('/auth'));
+      return;
     }
-  }, [profile, navigate]);
+
+    // 2. Fica escutando atualizações no banco sem gastar requisições
+    const banListener = supabase
+      .channel('ban-check')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE', // Só escuta se algo for atualizado
+          schema: 'public',
+          table: 'profiles',
+          filter: `id=eq.${user.id}`, // Escuta APENAS o perfil dele, economizando memória
+        },
+        async (payload) => {
+          // O Supabase enviou um sinal de que a linha dele foi alterada.
+          // Tem mensagem de bloqueio na atualização?
+          if (payload.new.block_message) {
+            // Chuta ele pra fora EM TEMPO REAL
+            await supabase.auth.signOut();
+            navigate('/auth');
+          }
+        }
+      )
+      .subscribe();
+
+    // Desliga o rádio se o usuário fechar a página
+    return () => {
+      supabase.removeChannel(banListener);
+    };
+  }, [user, profile, navigate]);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="text-lg">Carregando...</div>
       </div>
-    )
+    );
   }
 
   if (!user) {
-    return <Navigate to="/auth" />
+    return <Navigate to="/auth" />;
   }
 
-  // Enquanto o Leão de Chácara expulsa ele, não renderiza o site por baixo
-  if (profile?.block_message) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
-        <div className="text-lg text-red-500 font-bold animate-pulse">
-          Verificando permissões...
-        </div>
-      </div>
-    )
-  }
-
-  return <>{children}</>
+  return <>{children}</>;
 }
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
