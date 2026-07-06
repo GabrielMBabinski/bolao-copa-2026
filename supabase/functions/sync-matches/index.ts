@@ -97,19 +97,26 @@ serve(async (req) => {
     let normalizedMatches: NormalizedMatch[] = [];
 
     // ============================================================================
-    // TENTATIVA 1: API PRINCIPAL (football-data.org)
+    // TENTATIVA 1: API PRINCIPAL (API-Football) - Mais rápida e confiável
     // ============================================================================
     let successOnMain = false;
     let retries = 3;
 
-    console.log("Iniciando Tentativa na API Principal...");
+    console.log("Iniciando Tentativa na API Principal (API-Football)...");
+
+    if (!apiFootballKey) throw new Error("A Chave da API Principal (API_FOOTBALL_KEY) não está configurada nos Secrets.");
+
     while (retries > 0 && !successOnMain) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000); 
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
 
-        const res = await fetch('https://api.football-data.org/v4/competitions/2000/matches', {
-          headers: { 'X-Auth-Token': footballDataToken },
+        // Adicionamos o timezone do Brasil e removemos o filtro estrito de temporada para a Copa do Mundo
+        const res = await fetch('https://v3.football.api-sports.io/fixtures?league=1&season=2026&timezone=America/Sao_Paulo', {
+          headers: {
+            'x-rapidapi-host': 'v3.football.api-sports.io',
+            'x-apisports-key': apiFootballKey
+          },
           signal: controller.signal
         });
 
@@ -118,53 +125,9 @@ serve(async (req) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
         const data = await res.json();
-        
-        // Traduz o formato da API 1 para o nosso Formato Universal
-        normalizedMatches = (data.matches || []).map((m: any) => ({
-          id: m.id,
-          homeTeamName: m.homeTeam?.name,
-          awayTeamName: m.awayTeam?.name,
-          utcDate: m.utcDate,
-          stage: m.stage,
-          status: m.status, // Usa os status originais deles
-          scoreHome: m.score?.fullTime?.home ?? null,
-          scoreAway: m.score?.fullTime?.away ?? null,
-          penaltiesHome: m.score?.penalties?.home ?? null,
-          penaltiesAway: m.score?.penalties?.away ?? null,
-          duration: m.score?.duration || 'REGULAR'
-        }));
-        
-        console.log("✅ Sucesso na API Principal!");
-        successOnMain = true;
-      } catch (e: any) {
-        retries--;
-        console.warn(`⚠️ Erro na API Principal. Tentativas restantes: ${retries}. ${e.message}`);
-        if (retries > 0) await new Promise(res => setTimeout(res, 2000)); 
-      }
-    }
 
-    // ============================================================================
-    // TENTATIVA 2: API FALLBACK (API-Football) - Só roda se a principal falhar!
-    // ============================================================================
-    if (!successOnMain) {
-      console.log("Iniciando Tentativa na API Fallback...");
-      if (!apiFootballKey) throw new Error("API Principal falhou e a Chave do Fallback (API_FOOTBALL_KEY) não está configurada nos Secrets.");
-
-      try {
-        // ID da Copa do Mundo na API-Football é 1 (2026 World Cup)
-        const resFallback = await fetch('https://v3.football.api-sports.io/fixtures?league=1&season=2026', {
-          headers: {
-            'x-rapidapi-host': 'v3.football.api-sports.io',
-            'x-apisports-key': apiFootballKey 
-          }
-        });
-
-        if (!resFallback.ok) throw new Error(`HTTP ${resFallback.status}`);
-
-        const dataFallback = await resFallback.json();
-        
-        // Traduz o formato da API 2 para o nosso Formato Universal
-        normalizedMatches = (dataFallback.response || []).map((m: any) => {
+        // Traduz o formato da API-Football para o nosso Formato Universal
+        normalizedMatches = (data.response || []).map((m: any) => {
           let duration = 'REGULAR';
           if (m.fixture.status.short === 'PEN') duration = 'PENALTY_SHOOTOUT';
           else if (m.fixture.status.short === 'AET') duration = 'EXTRA_TIME';
@@ -179,17 +142,55 @@ serve(async (req) => {
             homeTeamName: m.teams.home.name,
             awayTeamName: m.teams.away.name,
             utcDate: m.fixture.date,
-            stage: m.league.round, // API-Football manda a fase no campo round
-            status: mappedStatus, 
-            scoreHome: m.goals.home ?? null, // Gols normais
+            stage: m.league.round,
+            status: mappedStatus,
+            scoreHome: m.goals.home ?? null,
             scoreAway: m.goals.away ?? null,
-            penaltiesHome: m.score.penalty.home ?? null, // Gols de penalti
+            penaltiesHome: m.score.penalty.home ?? null,
             penaltiesAway: m.score.penalty.away ?? null,
             duration: duration
           };
         });
 
-        console.log("✅ Sucesso na API Fallback!");
+        console.log("✅ Sucesso na API Principal (API-Football)!");
+        successOnMain = true;
+      } catch (e: any) {
+        retries--;
+        console.warn(`⚠️ Erro na API Principal. Tentativas restantes: ${retries}. ${e.message}`);
+        if (retries > 0) await new Promise(res => setTimeout(res, 2000));
+      }
+    }
+
+    // ============================================================================
+    // TENTATIVA 2: API FALLBACK (football-data.org) - Lenta, usada só se a 1ª cair
+    // ============================================================================
+    if (!successOnMain) {
+      console.log("Iniciando Tentativa na API Fallback (football-data.org)...");
+      try {
+        const resFallback = await fetch('https://api.football-data.org/v4/competitions/2000/matches', {
+          headers: { 'X-Auth-Token': footballDataToken }
+        });
+
+        if (!resFallback.ok) throw new Error(`HTTP ${resFallback.status}`);
+
+        const dataFallback = await resFallback.json();
+
+        // Traduz o formato da football-data para o nosso Formato Universal
+        normalizedMatches = (dataFallback.matches || []).map((m: any) => ({
+          id: m.id,
+          homeTeamName: m.homeTeam?.name,
+          awayTeamName: m.awayTeam?.name,
+          utcDate: m.utcDate,
+          stage: m.stage,
+          status: m.status,
+          scoreHome: m.score?.fullTime?.home ?? null,
+          scoreAway: m.score?.fullTime?.away ?? null,
+          penaltiesHome: m.score?.penalties?.home ?? null,
+          penaltiesAway: m.score?.penalties?.away ?? null,
+          duration: m.score?.duration || 'REGULAR'
+        }));
+
+        console.log("✅ Sucesso na API Fallback (football-data.org)!");
       } catch (e: any) {
         console.error("❌ Catástrofe: Ambas as APIs falharam.", e.message);
         throw new Error('Falha completa: Nenhuma das APIs conseguiu retornar os dados dos jogos.');
@@ -198,7 +199,7 @@ serve(async (req) => {
 
 
     // ============================================================================
-    // LÓGICA DE ATUALIZAÇÃO DO SUPABASE (Consumindo os Dados Normalizados)
+    // LÓGICA DE ATUALIZAÇÃO DO SUPABASE (Com Logs Detalhados)
     // ============================================================================
     const { data: dbTeams } = await supabase.from('teams').select('id, name, flag_code')
     const { data: dbMatches } = await supabase.from('matches').select('*')
@@ -207,6 +208,8 @@ serve(async (req) => {
 
     let insertCount = 0
     let updateCount = 0
+
+    console.log(`📦 A API retornou um total de ${normalizedMatches.length} jogos para análise.`);
 
     for (const match of normalizedMatches) {
       if (!['SCHEDULED', 'TIMED', 'IN_PLAY', 'PAUSED', 'FINISHED'].includes(match.status)) continue
@@ -235,7 +238,15 @@ serve(async (req) => {
       if (match.status === 'FINISHED') dbStatus = 'finished'
       else if (['IN_PLAY', 'PAUSED', 'LIVE'].includes(match.status)) dbStatus = 'in_progress'
 
-      // Usa o dicionário expandido para garantir que traduz a fase independente da API que enviou
+      // ==========================================
+      // 🕵️ LOG ESPIÃO (RADAR DE JOGOS IMPORTANTES)
+      // ==========================================
+      // Isso vai imprimir exatamente o que a API está mandando para esses times
+      if (['england', 'inglaterra', 'spain', 'espanha', 'brazil', 'brasil'].some(t =>
+        translatedHome.includes(t) || translatedAway.includes(t))) {
+        console.log(`🔎 RADAR API: ${match.homeTeamName} x ${match.awayTeamName} | Status na API: "${match.status}" (Traduzido: ${dbStatus}) | Placar: ${match.scoreHome} x ${match.scoreAway}`);
+      }
+
       const dbPhase = PHASE_DICTIONARY[match.stage] || 'group'
 
       let homeScore = match.scoreHome;
@@ -253,13 +264,13 @@ serve(async (req) => {
 
         if (homePen > awayPen) dbPenaltyWinner = 'home';
         else if (awayPen > homePen) dbPenaltyWinner = 'away';
-        
+
       } else if (match.status === 'FINISHED') {
         dbPenaltyWinner = null;
       }
 
       const existingMatch = dbMatches.find(m =>
-        m.api_id == match.id || // Usei == para permitir string(api1) com number(api2)
+        m.api_id == match.id ||
         (m.home_team_id === hId && m.away_team_id === aId && m.phase === dbPhase)
       )
 
@@ -281,6 +292,11 @@ serve(async (req) => {
           existingMatch.match_date !== match.utcDate
 
         if (needsUpdate) {
+          // ==========================================
+          // 📝 LOG DE ATUALIZAÇÃO BEM SUCEDIDA
+          // ==========================================
+          console.log(`🔄 ATUALIZANDO: ${match.homeTeamName} x ${match.awayTeamName} | Status Anterior: ${existingMatch.status} -> Novo Status: ${dbStatus} | Placar Final: ${homeScore} x ${awayScore}`);
+
           const { error: updateError } = await supabase
             .from('matches')
             .update({
@@ -312,11 +328,16 @@ serve(async (req) => {
           })
 
         if (!insertError) {
-          console.log(`✅ NOVO CONFRONTO INSERIDO: ${match.homeTeamName} x ${match.awayTeamName} (${dbPhase})`)
+          console.log(`✅ NOVO CONFRONTO: ${match.homeTeamName} x ${match.awayTeamName} inserido no banco!`)
           insertCount++
         }
       }
     }
+
+    // ==========================================
+    // 📊 LOG DE RESUMO FINAL
+    // ==========================================
+    console.log(`🏁 FIM DA SINCRONIZAÇÃO | Jogos Inseridos: ${insertCount} | Jogos Atualizados: ${updateCount}`);
 
     return new Response(
       JSON.stringify({
