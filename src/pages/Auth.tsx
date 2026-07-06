@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Trophy } from 'lucide-react'
+import { supabase } from '@/lib/supabaseClient'
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true)
@@ -23,10 +24,34 @@ export default function Auth() {
 
     try {
       if (isLogin) {
+        // 1. Tenta fazer o login normalmente
         await signIn(email, password)
+
+        // 2. NOVA TRAVA: Verifica se o usuário recém-logado está suspenso
+        const { data: { user } } = await supabase.auth.getUser()
+        
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('block_message')
+            .eq('id', user.id)
+            .single()
+
+          // Se tiver mensagem de bloqueio, aplica o castigo!
+          if (profile?.block_message) {
+            alert(`🚨 ACESSO SUSPENSO 🚨\n\n${profile.block_message}`)
+            
+            // Chuta ele pra fora do sistema imediatamente
+            await supabase.auth.signOut()
+            setLoading(false)
+            return // Impede o navigate('/') de rodar, mantendo ele na tela de login
+          }
+        }
       } else {
         await signUp(email, password, name)
       }
+      
+      // Se não estiver bloqueado, entra no site normalmente
       navigate('/')
     } catch (err: any) {
       setError(err.message || 'Ocorreu um erro ao processar sua solicitação')
