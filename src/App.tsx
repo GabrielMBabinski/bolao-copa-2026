@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import Layout from './components/Layout'
 import Auth from './pages/Auth'
@@ -10,41 +10,28 @@ import Admin from './pages/Admin'
 import Profile from './pages/Profile'
 import { useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { useNavigate } from 'react-router-dom';
 
-export default function Home() {
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  // Puxamos o profile que já vem do seu hook
+  const { user, loading, profile } = useAuth();
   const navigate = useNavigate();
 
-  // O LEÃO DE CHÁCARA: Roda toda vez que a página inicial é aberta
+  // O LEÃO DE CHÁCARA: Roda em TODAS as páginas protegidas
   useEffect(() => {
-    const checkBannedStatus = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('block_message')
-          .eq('id', user.id)
-          .single();
-
-        // Se o leão de chácara ver que ele está bloqueado...
-        if (profile?.block_message) {
-          // 1. Rasga a credencial dele (desloga do navegador na hora)
-          await supabase.auth.signOut();
-          
-          // 2. Chuta ele de volta pra porta de entrada
-          navigate('/login'); // (ou window.location.href = '/login' se não tiver o navigate)
-        }
+    const kickBannedUser = async () => {
+      if (profile?.block_message) {
+        // 1. Rasga a credencial dele (desloga do navegador na hora)
+        await supabase.auth.signOut();
+        
+        // 2. Chuta ele de volta pra porta de entrada (sua rota é /auth)
+        navigate('/auth'); 
       }
     };
 
-    checkBannedStatus();
-  }, []);
-
-  // ... resto do código da sua Home ...
-
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth()
+    if (profile) {
+      kickBannedUser();
+    }
+  }, [profile, navigate]);
 
   if (loading) {
     return (
@@ -56,6 +43,17 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (!user) {
     return <Navigate to="/auth" />
+  }
+
+  // Enquanto o Leão de Chácara expulsa ele, não renderiza o site por baixo
+  if (profile?.block_message) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="text-lg text-red-500 font-bold animate-pulse">
+          Verificando permissões...
+        </div>
+      </div>
+    )
   }
 
   return <>{children}</>
