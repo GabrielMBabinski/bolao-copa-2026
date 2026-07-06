@@ -28,17 +28,39 @@ const TEAM_DICTIONARY: Record<string, string> = {
   'bosnia & herzegovina': 'bosnia e herzegovina', 'bosnia': 'bosnia e herzegovina', 'bih': 'bosnia e herzegovina'
 }
 
-// --- DICIONÁRIO DE FASES (API -> Banco de Dados) ---
+// --- DICIONÁRIO DE FASES (Normalização para o Banco) ---
 const PHASE_DICTIONARY: Record<string, string> = {
+  // API Principal (football-data)
   'GROUP_STAGE': 'group',
-  'LAST_32': 'round_32',
-  'ROUND_OF_32': 'round_32',
-  'LAST_16': 'round_16',
-  'ROUND_OF_16': 'round_16',
+  'LAST_32': 'round_32', 'ROUND_OF_32': 'round_32',
+  'LAST_16': 'round_16', 'ROUND_OF_16': 'round_16',
   'QUARTER_FINALS': 'quarter',
   'SEMI_FINALS': 'semi',
   'FINAL': 'final',
-  'THIRD_PLACE': 'third_place'
+  'THIRD_PLACE': 'third_place',
+  // Fallback API (API-Football)
+  'Group Stage': 'group',
+  'Round of 32': 'round_32',
+  'Round of 16': 'round_16', '16th Finals': 'round_16',
+  'Quarter-finals': 'quarter',
+  'Semi-finals': 'semi',
+  'Final': 'final',
+  '3rd Place Final': 'third_place'
+}
+
+// Interface padronizada que nossa lógica interna vai consumir (independente de qual API funcionou)
+interface NormalizedMatch {
+  id: string | number;
+  homeTeamName: string;
+  awayTeamName: string;
+  utcDate: string;
+  stage: string;
+  status: string; // 'SCHEDULED', 'IN_PLAY', 'FINISHED'
+  scoreHome: number | null;
+  scoreAway: number | null;
+  penaltiesHome: number | null;
+  penaltiesAway: number | null;
+  duration: string; // 'REGULAR', 'EXTRA_TIME', 'PENALTY_SHOOTOUT'
 }
 
 const normalizeName = (name: string | null | undefined) => {
@@ -54,61 +76,130 @@ const translateApiName = (apiName: string): string => {
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
-  // --- NOVA BLINDAGEM DE SEGURANÇA ---
   const authHeader = req.headers.get('Authorization')
   const expectedAnon = `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`
   const expectedService = `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
 
   if (authHeader !== expectedAnon && authHeader !== expectedService) {
     console.warn('Tentativa de acesso negada à Edge Function.')
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const footballDataToken = Deno.env.get('FOOTBALL_DATA_TOKEN')!
+    const apiFootballKey = Deno.env.get('API_FOOTBALL_KEY') // NOVO SEGREDO NECESSÁRIO!
 
     if (!footballDataToken) throw new Error('FOOTBALL_DATA_TOKEN não configurado')
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
-    const apiUrl = `https://api.football-data.org/v4/competitions/2000/matches`
+    let normalizedMatches: NormalizedMatch[] = [];
 
-    // --- SISTEMA DE RESILIÊNCIA (RETRY & TIMEOUT) ---
-    let apiResponse;
-    let apiData;
+    // ============================================================================
+    // TENTATIVA 1: API PRINCIPAL (football-data.org)
+    // ============================================================================
+    let successOnMain = false;
     let retries = 3;
 
-    while (retries > 0) {
+    console.log("Iniciando Tentativa na API Principal...");
+    while (retries > 0 && !successOnMain) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 segundos de timeout limite
+        const timeoutId = setTimeout(() => controller.abort(), 6000); 
 
-        apiResponse = await fetch(apiUrl, {
+        const res = await fetch('https://api.football-data.org/v4/competitions/2000/matches', {
           headers: { 'X-Auth-Token': footballDataToken },
           signal: controller.signal
         });
 
         clearTimeout(timeoutId);
 
-        if (!apiResponse.ok) throw new Error(`HTTP Error: ${apiResponse.status}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-        apiData = await apiResponse.json();
-        break; // Sucesso, sai do loop de tentativas
+        const data = await res.json();
+        
+        // Traduz o formato da API 1 para o nosso Formato Universal
+        normalizedMatches = (data.matches || []).map((m: any) => ({
+          id: m.id,
+          homeTeamName: m.homeTeam?.name,
+          awayTeamName: m.awayTeam?.name,
+          utcDate: m.utcDate,
+          stage: m.stage,
+          status: m.status, // Usa os status originais deles
+          scoreHome: m.score?.fullTime?.home ?? null,
+          scoreAway: m.score?.fullTime?.away ?? null,
+          penaltiesHome: m.score?.penalties?.home ?? null,
+          penaltiesAway: m.score?.penalties?.away ?? null,
+          duration: m.score?.duration || 'REGULAR'
+        }));
+        
+        console.log("✅ Sucesso na API Principal!");
+        successOnMain = true;
       } catch (e: any) {
         retries--;
-        console.error(`Falha de conexão com a API. Tentativas restantes: ${retries}. Erro: ${e.message}`);
-        if (retries === 0) throw new Error('Falha ao buscar dados na API externa após 3 tentativas.');
-        await new Promise(res => setTimeout(res, 2000)); // Espera 2 segundos antes de tentar de novo
+        console.warn(`⚠️ Erro na API Principal. Tentativas restantes: ${retries}. ${e.message}`);
+        if (retries > 0) await new Promise(res => setTimeout(res, 2000)); 
       }
     }
 
-    const apiMatches = apiData.matches || []
+    // ============================================================================
+    // TENTATIVA 2: API FALLBACK (API-Football) - Só roda se a principal falhar!
+    // ============================================================================
+    if (!successOnMain) {
+      console.log("Iniciando Tentativa na API Fallback...");
+      if (!apiFootballKey) throw new Error("API Principal falhou e a Chave do Fallback (API_FOOTBALL_KEY) não está configurada nos Secrets.");
 
-    // Carrega dados atuais do banco
+      try {
+        // ID da Copa do Mundo na API-Football é 1 (2026 World Cup)
+        const resFallback = await fetch('https://v3.football.api-sports.io/fixtures?league=1&season=2026', {
+          headers: {
+            'x-rapidapi-host': 'v3.football.api-sports.io',
+            'x-apisports-key': apiFootballKey 
+          }
+        });
+
+        if (!resFallback.ok) throw new Error(`HTTP ${resFallback.status}`);
+
+        const dataFallback = await resFallback.json();
+        
+        // Traduz o formato da API 2 para o nosso Formato Universal
+        normalizedMatches = (dataFallback.response || []).map((m: any) => {
+          let duration = 'REGULAR';
+          if (m.fixture.status.short === 'PEN') duration = 'PENALTY_SHOOTOUT';
+          else if (m.fixture.status.short === 'AET') duration = 'EXTRA_TIME';
+
+          let mappedStatus = 'SCHEDULED';
+          if (['FT', 'AET', 'PEN'].includes(m.fixture.status.short)) mappedStatus = 'FINISHED';
+          else if (['1H', 'HT', '2H', 'ET', 'BT', 'P'].includes(m.fixture.status.short)) mappedStatus = 'IN_PLAY';
+          else if (['SUSP', 'INT'].includes(m.fixture.status.short)) mappedStatus = 'PAUSED';
+
+          return {
+            id: m.fixture.id,
+            homeTeamName: m.teams.home.name,
+            awayTeamName: m.teams.away.name,
+            utcDate: m.fixture.date,
+            stage: m.league.round, // API-Football manda a fase no campo round
+            status: mappedStatus, 
+            scoreHome: m.goals.home ?? null, // Gols normais
+            scoreAway: m.goals.away ?? null,
+            penaltiesHome: m.score.penalty.home ?? null, // Gols de penalti
+            penaltiesAway: m.score.penalty.away ?? null,
+            duration: duration
+          };
+        });
+
+        console.log("✅ Sucesso na API Fallback!");
+      } catch (e: any) {
+        console.error("❌ Catástrofe: Ambas as APIs falharam.", e.message);
+        throw new Error('Falha completa: Nenhuma das APIs conseguiu retornar os dados dos jogos.');
+      }
+    }
+
+
+    // ============================================================================
+    // LÓGICA DE ATUALIZAÇÃO DO SUPABASE (Consumindo os Dados Normalizados)
+    // ============================================================================
     const { data: dbTeams } = await supabase.from('teams').select('id, name, flag_code')
     const { data: dbMatches } = await supabase.from('matches').select('*')
 
@@ -117,14 +208,13 @@ serve(async (req) => {
     let insertCount = 0
     let updateCount = 0
 
-    for (const match of apiMatches) {
+    for (const match of normalizedMatches) {
       if (!['SCHEDULED', 'TIMED', 'IN_PLAY', 'PAUSED', 'FINISHED'].includes(match.status)) continue
 
-      // Pula os jogos onde as seleções ainda não estão definidas ("Winner Group A", etc.)
-      if (!match.homeTeam?.name || !match.awayTeam?.name) continue;
+      if (!match.homeTeamName || !match.awayTeamName) continue;
 
-      const translatedHome = translateApiName(match.homeTeam.name)
-      const translatedAway = translateApiName(match.awayTeam.name)
+      const translatedHome = translateApiName(match.homeTeamName)
+      const translatedAway = translateApiName(match.awayTeamName)
 
       const findTeamId = (translatedName: string, originalApiName: string) => {
         return dbTeams.find(t => {
@@ -136,57 +226,43 @@ serve(async (req) => {
         })?.id
       }
 
-      const hId = findTeamId(translatedHome, match.homeTeam.name)
-      const aId = findTeamId(translatedAway, match.awayTeam.name)
+      const hId = findTeamId(translatedHome, match.homeTeamName)
+      const aId = findTeamId(translatedAway, match.awayTeamName)
 
-      if (!hId || !aId) {
-        console.log(`⚠️ Jogo ignorado: ${match.homeTeam?.name} x ${match.awayTeam?.name}. Motivo: Times não encontrados.`);
-        continue;
-      }
+      if (!hId || !aId) continue;
 
       let dbStatus = 'pending'
       if (match.status === 'FINISHED') dbStatus = 'finished'
       else if (['IN_PLAY', 'PAUSED', 'LIVE'].includes(match.status)) dbStatus = 'in_progress'
 
+      // Usa o dicionário expandido para garantir que traduz a fase independente da API que enviou
       const dbPhase = PHASE_DICTIONARY[match.stage] || 'group'
 
-      // --- LÓGICA BLINDADA PARA O PLACAR ---
-      // Pega o placar cheio que a API envia
-      let homeScore = match.score?.fullTime?.home ?? null;
-      let awayScore = match.score?.fullTime?.away ?? null;
+      let homeScore = match.scoreHome;
+      let awayScore = match.scoreAway;
       let dbPenaltyWinner = null;
 
-      // Se o jogo foi para os pênaltis...
-      if (match.score?.duration === 'PENALTY_SHOOTOUT') {
-        const homePen = match.score?.penalties?.home ?? 0;
-        const awayPen = match.score?.penalties?.away ?? 0;
+      if (match.duration === 'PENALTY_SHOOTOUT') {
+        const homePen = match.penaltiesHome ?? 0;
+        const awayPen = match.penaltiesAway ?? 0;
 
-        // A MÁGICA: Corrige o placar do tempo normal se a API tiver somado os pênaltis nele.
-        // Se o jogo foi pros pênaltis, obrigatoriamente ele terminou empatado. Se o fullTime
-        // estiver diferente, nós subtraímos os pênaltis para voltar ao empate original.
         if (homeScore !== null && awayScore !== null && homeScore !== awayScore) {
           homeScore = homeScore - homePen;
           awayScore = awayScore - awayPen;
         }
 
-        // Define quem ganhou os pênaltis
         if (homePen > awayPen) dbPenaltyWinner = 'home';
         else if (awayPen > homePen) dbPenaltyWinner = 'away';
         
       } else if (match.status === 'FINISHED') {
-        // Garantia de limpeza para jogos decididos no tempo normal
         dbPenaltyWinner = null;
       }
 
-      // Identifica se o jogo já existe no banco de dados
       const existingMatch = dbMatches.find(m =>
-        m.api_id === match.id ||
+        m.api_id == match.id || // Usei == para permitir string(api1) com number(api2)
         (m.home_team_id === hId && m.away_team_id === aId && m.phase === dbPhase)
       )
 
-      // --- LIMPEZA PREVENTIVA UNIFICADA ---
-      // Apaga qualquer duplicata que compartilhe os mesmos times e fase, 
-      // poupando apenas o ID oficial que já vamos atualizar.
       await supabase
         .from('matches')
         .delete()
@@ -196,14 +272,13 @@ serve(async (req) => {
         .neq('id', existingMatch?.id || '00000000-0000-0000-0000-000000000000');
 
       if (existingMatch) {
-        // --- LOGICA DE UPDATE ---
         const needsUpdate =
           existingMatch.home_score !== homeScore ||
           existingMatch.away_score !== awayScore ||
           existingMatch.status !== dbStatus ||
           existingMatch.penalty_winner !== dbPenaltyWinner ||
-          existingMatch.api_id !== match.id ||
-          existingMatch.match_date !== match.utcDate // Atualiza caso a FIFA mude a data
+          existingMatch.api_id != match.id ||
+          existingMatch.match_date !== match.utcDate
 
         if (needsUpdate) {
           const { error: updateError } = await supabase
@@ -222,7 +297,6 @@ serve(async (req) => {
           if (!updateError) updateCount++
         }
       } else {
-        // --- LOGICA DE INSERT AUTOMÁTICO ---
         const { error: insertError } = await supabase
           .from('matches')
           .insert({
@@ -238,10 +312,8 @@ serve(async (req) => {
           })
 
         if (!insertError) {
-          console.log(`✅ NOVO CONFRONTO INSERIDO: ${match.homeTeam.name} x ${match.awayTeam.name} (${dbPhase})`)
+          console.log(`✅ NOVO CONFRONTO INSERIDO: ${match.homeTeamName} x ${match.awayTeamName} (${dbPhase})`)
           insertCount++
-        } else {
-          console.error(`❌ Erro ao inserir jogo ${match.id}:`, insertError.message)
         }
       }
     }
