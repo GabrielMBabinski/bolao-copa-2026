@@ -372,18 +372,33 @@ export default function Dashboard() {
                         {formatDate(match.match_date)}
                       </div>
                     </div>
-                    <div className="flex items-center justify-center gap-2 sm:gap-4">
-                      <div className="flex flex-col items-center flex-1">
-                        <TeamFlag flagCode={match.home_team.flag_code} />
-                        <span className="font-medium text-xs sm:text-sm text-center mt-1 truncate max-w-[80px] sm:max-w-[120px]">{match.home_team.name}</span>
+
+                    {/* Alterei aqui para agrupar o placar e a mensagem de pênaltis */}
+                    <div className="flex flex-col items-center justify-center w-full">
+                      <div className="flex items-center justify-center gap-2 sm:gap-4 w-full">
+                        <div className="flex flex-col items-center flex-1">
+                          <TeamFlag flagCode={match.home_team.flag_code} />
+                          <span className="font-medium text-xs sm:text-sm text-center mt-1 truncate max-w-[80px] sm:max-w-[120px]">{match.home_team.name}</span>
+                        </div>
+
+                        <span className="text-lg sm:text-2xl font-black text-primary tracking-widest bg-muted px-3 py-1 rounded-lg">
+                          {match.home_score} - {match.away_score}
+                        </span>
+
+                        <div className="flex flex-col items-center flex-1">
+                          <TeamFlag flagCode={match.away_team.flag_code} />
+                          <span className="font-medium text-xs sm:text-sm text-center mt-1 truncate max-w-[80px] sm:max-w-[120px]">{match.away_team.name}</span>
+                        </div>
                       </div>
-                      <span className="text-lg sm:text-2xl font-black text-primary tracking-widest bg-muted px-3 py-1 rounded-lg">
-                        {match.home_score} - {match.away_score}
-                      </span>
-                      <div className="flex flex-col items-center flex-1">
-                        <TeamFlag flagCode={match.away_team.flag_code} />
-                        <span className="font-medium text-xs sm:text-sm text-center mt-1 truncate max-w-[80px] sm:max-w-[120px]">{match.away_team.name}</span>
-                      </div>
+
+                      {/* 🌟 MÁGICA DOS PÊNALTIS AQUI 🌟 */}
+                      {match.penalty_winner && (
+                        <div className="mt-3 text-[10px] sm:text-xs font-bold text-primary bg-primary/10 px-3 py-1 rounded-full flex items-center gap-1.5 border border-primary/20">
+                          <Trophy className="h-3 w-3" />
+                          {match.penalty_winner === 'home' ? match.home_team.name : match.away_team.name} venceu nos pênaltis
+                        </div>
+                      )}
+
                     </div>
                   </div>
                 ))}
@@ -410,8 +425,8 @@ export default function Dashboard() {
                   <div
                     key={team.id}
                     className={`flex items-center justify-between p-3 border rounded-lg transition-colors ${team.is_eliminated
-                        ? 'bg-card/30 opacity-50 grayscale' // Visual apagado para eliminados
-                        : 'bg-card/50 hover:bg-muted/50'    // Visual normal para times vivos
+                      ? 'bg-card/30 opacity-50 grayscale' // Visual apagado para eliminados
+                      : 'bg-card/50 hover:bg-muted/50'    // Visual normal para times vivos
                       }`}
                   >                    <div className="flex items-center gap-3">
                       <span className={`font-black w-4 text-center ${index === 0 ? 'text-yellow-500' : index === 1 ? 'text-slate-400' : index === 2 ? 'text-amber-600' : 'text-muted-foreground'}`}>

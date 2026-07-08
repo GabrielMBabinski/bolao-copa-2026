@@ -59,9 +59,6 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
     let apiMatches = [];
 
-    // ============================================================================
-    // BUSCA NA API PRINCIPAL (football-data.org - A ÚNICA QUE TRAZ A LISTA CHEIA)
-    // ============================================================================
     let success = false;
     let retries = 3;
 
@@ -98,8 +95,6 @@ serve(async (req) => {
 
     let insertCount = 0
     let updateCount = 0
-
-    // PREPARA O RELÓGIO PARA A NOSSA TRAVA DE SEGURANÇA
     const now = new Date();
 
     for (const match of apiMatches) {
@@ -117,39 +112,68 @@ serve(async (req) => {
       let dbStatus = 'pending'
       if (match.status === 'FINISHED') dbStatus = 'finished'
       else if (['IN_PLAY', 'PAUSED', 'LIVE'].includes(match.status)) {
-        // ============================================================================
-        // 🛑 TRAVA DE SEGURANÇA (FORÇAR TÉRMINO)
-        // Se o jogo começou há mais de 3 horas e 30 minutos (210 minutos), ele JÁ ACABOU!
-        // Não importa se a API está dormindo, nós forçamos o status para FINISHED.
-        // ============================================================================
         const matchStartTime = new Date(match.utcDate);
         const diffInMinutes = (now.getTime() - matchStartTime.getTime()) / (1000 * 60);
         
         if (diffInMinutes > 210) {
           dbStatus = 'finished';
-          console.log(`🛑 Jogo forçado a finalizar: ${match.homeTeam.name} x ${match.awayTeam.name} (Atraso da API detectado)`);
         } else {
           dbStatus = 'in_progress';
         }
       }
 
-      if (['england', 'inglaterra', 'spain', 'espanha', 'brazil', 'brasil'].some(t => translatedHome.includes(t) || translatedAway.includes(t))) {
-        console.log(`🔎 RADAR: ${match.homeTeam.name} x ${match.awayTeam.name} | API mandou: "${match.status}" | Banco salvará: "${dbStatus}"`);
-      }
-
       const dbPhase = PHASE_DICTIONARY[match.stage] || 'group'
+
+      // ============================================================================
+      // 🧠 LÓGICA INTELIGENTE DE PÊNALTIS E VENCEDOR
+      // ============================================================================
       let homeScore = match.score?.fullTime?.home ?? null;
       let awayScore = match.score?.fullTime?.away ?? null;
       let dbPenaltyWinner = null;
 
-      if (match.score?.duration === 'PENALTY_SHOOTOUT') {
-        const homePen = match.score?.penalties?.home ?? 0;
-        const awayPen = match.score?.penalties?.away ?? 0;
-        if (homeScore !== null && awayScore !== null && homeScore !== awayScore) {
-          homeScore = homeScore - homePen; awayScore = awayScore - awayPen;
+      const homePen = match.score?.penalties?.home;
+      const awayPen = match.score?.penalties?.away;
+      
+      const isPenalty = match.score?.duration === 'PENALTY_SHOOTOUT' || (homePen !== undefined && homePen !== null);
+
+      if (isPenalty) {
+        // TENTA DESCOBRIR O VENCEDOR PELOS GOLS
+        if (homePen !== undefined && homePen !== null && awayPen !== undefined && awayPen !== null) {
+          if (homePen > awayPen) dbPenaltyWinner = 'home';
+          else if (awayPen > homePen) dbPenaltyWinner = 'away';
         }
-        if (homePen > awayPen) dbPenaltyWinner = 'home';
-        else if (awayPen > homePen) dbPenaltyWinner = 'away';
+        
+        // PLANO B: SE A API OMITIU OS GOLS, MAS DISSE QUEM AVANÇOU
+        if (!dbPenaltyWinner && match.score?.winner) {
+          if (match.score.winner === 'HOME_TEAM') dbPenaltyWinner = 'home';
+          else if (match.score.winner === 'AWAY_TEAM') dbPenaltyWinner = 'away';
+        }
+
+        // ENCONTRA O PLACAR REAL DO EMPATE
+        const etHome = match.score?.extraTime?.home;
+        const etAway = match.score?.extraTime?.away;
+        const rtHome = match.score?.regularTime?.home;
+        const rtAway = match.score?.regularTime?.away;
+
+        if (etHome !== undefined && etHome !== null && etHome === etAway) {
+          homeScore = etHome;
+          awayScore = etAway;
+        } else if (rtHome !== undefined && rtHome !== null && rtHome === rtAway) {
+          homeScore = rtHome;
+          awayScore = rtAway;
+        } else if (homeScore !== null && awayScore !== null) {
+          const hSub = homeScore - (homePen ?? 0);
+          const aSub = awayScore - (awayPen ?? 0);
+          
+          if (hSub === aSub && hSub >= 0) {
+            homeScore = hSub;
+            awayScore = aSub;
+          } else {
+            const trueScore = Math.min(homeScore, awayScore);
+            homeScore = trueScore;
+            awayScore = trueScore;
+          }
+        }
       } else if (dbStatus === 'finished') {
         dbPenaltyWinner = null;
       }
@@ -159,12 +183,56 @@ serve(async (req) => {
       await supabase.from('matches').delete().eq('home_team_id', hId).eq('away_team_id', aId).eq('phase', dbPhase).neq('id', existingMatch?.id || '00000000-0000-0000-0000-000000000000');
 
       if (existingMatch) {
-        const needsUpdate = existingMatch.home_score !== homeScore || existingMatch.away_score !== awayScore || existingMatch.status !== dbStatus || existingMatch.penalty_winner !== dbPenaltyWinner || existingMatch.api_id != match.id || existingMatch.match_date !== match.utcDate
+        const isDateDifferent = new Date(existingMatch.match_date).getTime() !== new Date(match.utcDate).getTime();
+        
+        // ============================================================================
+        // 🛡️ PROTEÇÃO ABSOLUTA DE DADOS
+        // ============================================================================
+        let finalHomeScore = homeScore;
+        let finalAwayScore = awayScore;
+        let finalPenaltyWinner = dbPenaltyWinner;
+
+        if (existingMatch.status === 'finished') {
+          // 1. Mantém o placar intocável se o jogo já tinha acabado
+          finalHomeScore = existingMatch.home_score;
+          finalAwayScore = existingMatch.away_score;
+          
+          // 2. Se o banco já tinha o vencedor dos pênaltis, preserva. 
+          // Se o banco não tinha (estava null) e a API agora mandou, a gente atualiza!
+          if (existingMatch.penalty_winner) {
+            finalPenaltyWinner = existingMatch.penalty_winner;
+          }
+        }
+
+        const needsUpdate =
+          existingMatch.home_score !== finalHomeScore ||
+          existingMatch.away_score !== finalAwayScore ||
+          existingMatch.status !== dbStatus ||
+          existingMatch.penalty_winner !== finalPenaltyWinner ||
+          String(existingMatch.api_id) !== String(match.id) ||
+          isDateDifferent;
 
         if (needsUpdate) {
-          console.log(`🔄 UPDATE NO BANCO: ${match.homeTeam.name} x ${match.awayTeam.name} | De: ${existingMatch.status} Para: ${dbStatus}`);
-          const { error: updateError } = await supabase.from('matches').update({ api_id: match.id, match_date: match.utcDate, home_score: homeScore, away_score: awayScore, status: dbStatus, penalty_winner: dbPenaltyWinner, updated_at: new Date().toISOString() }).eq('id', existingMatch.id)
-          if (!updateError) updateCount++
+          console.log(`🔄 TENTANDO UPDATE: ${match.homeTeam.name} x ${match.awayTeam.name} | De: ${existingMatch.status} (${existingMatch.home_score}x${existingMatch.away_score} Pen:${existingMatch.penalty_winner}) Para: ${dbStatus} (${finalHomeScore}x${finalAwayScore} Pen:${finalPenaltyWinner})`);
+          
+          const { error: updateError } = await supabase
+            .from('matches')
+            .update({ 
+              api_id: match.id, 
+              match_date: match.utcDate, 
+              home_score: finalHomeScore, 
+              away_score: finalAwayScore, 
+              status: dbStatus, 
+              penalty_winner: finalPenaltyWinner, 
+              updated_at: new Date().toISOString() 
+            })
+            .eq('id', existingMatch.id)
+            
+          if (updateError) {
+            console.error(`❌ O BANCO REJEITOU A ATUALIZAÇÃO DE ${match.homeTeam.name}:`, updateError.message, updateError.details, updateError.hint);
+          } else {
+            updateCount++;
+          }
         }
       } else {
         const { error: insertError } = await supabase.from('matches').insert({ api_id: match.id, home_team_id: hId, away_team_id: aId, match_date: match.utcDate, phase: dbPhase, home_score: homeScore, away_score: awayScore, status: dbStatus, penalty_winner: dbPenaltyWinner })
