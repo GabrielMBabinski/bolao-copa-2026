@@ -1,6 +1,6 @@
 // src/lib/audio.ts
 
-export const siteAudio = new Audio();
+export const siteAudio = new Audio("Kylian-dictador.mp3");
 siteAudio.loop = true;
 siteAudio.volume = 0.5; 
 

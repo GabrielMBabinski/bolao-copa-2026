@@ -248,7 +248,7 @@ export default function Dashboard() {
 
         {/* VÍDEO (Fica rodando no fundo) */}
         <video
-          src="Neymar-4K.mp4"
+          src="Kylian-Mbappe-4K.mp4"
           autoPlay
           loop
           muted
@@ -258,7 +258,7 @@ export default function Dashboard() {
 
         {/* CAPA (Some suavemente após 5 segundos) */}
         <img
-          src="/neymar-banner.jpg"
+          src="kylian-dictador2.png"
           alt="Capa do Banner"
           className={`absolute inset-0 w-full h-full object-cover object-center transition-all duration-1000 ease-in-out z-10 pointer-events-none group-hover:scale-105 ${showPoster ? 'opacity-100' : 'opacity-0'
             }`}
