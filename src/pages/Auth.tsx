@@ -1,4 +1,4 @@
-import { useState } from 'react'
+{/*  import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -81,7 +81,7 @@ export default function Auth() {
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-6 text-center pt-4">
             
-            {/* Se você colocou o link de uma imagem no banco, ela aparece aqui! */}
+            {/* Se você colocou o link de uma imagem no banco, ela aparece aqui! 
             {blockData.image && (
               <div className="w-full rounded-xl overflow-hidden border-2 border-red-500/30">
                 <img 
@@ -124,7 +124,7 @@ export default function Auth() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* ... Todo o resto do seu formulário continua igualzinho ... */}
+            {/* ... Todo o resto do seu formulário continua igualzinho ... 
             {!isLogin && (
               <div className="space-y-2">
                 <label htmlFor="name" className="text-sm font-medium">Nome</label>
@@ -153,4 +153,14 @@ export default function Auth() {
       </Card>
     </div>
   )
+}
+  */}
+
+
+  export default function Manutencao() {
+  return (
+    <main className="flex items-center justify-center min-h-screen bg-gray-50">
+      <h1 className="text-2xl font-bold text-gray-800">Em manutenção. Voltamos em breve!</h1>
+    </main>
+  );
 }
