@@ -10,6 +10,7 @@ import Admin from './pages/Admin'
 import Profile from './pages/Profile'
 import { useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { Trophy } from "lucide-react";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   // Puxamos o profile do cache do seu hook (sem fazer nova requisição)
@@ -91,6 +92,33 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 
   return <>{children}</>
 }
+
+export default function App() {
+  // 👇 COLOQUE ESTE RETURN LOGO NO INÍCIO DA FUNÇÃO DO SEU APP
+  // Isso vai sobrepor todas as rotas e bloquear qualquer acesso, logado ou não.
+  return (
+    <div className="min-h-screen bg-[#0a0f1c] text-slate-200 flex flex-col items-center justify-center p-6 text-center">
+      <div className="max-w-md flex flex-col items-center">
+        <div className="bg-primary/20 p-6 rounded-full mb-8">
+          <Trophy className="h-16 w-16 text-primary animate-pulse" />
+        </div>
+        
+        <h1 className="text-3xl sm:text-4xl font-black text-white mb-4 tracking-tight">
+          O Bolão Chegou ao Fim!
+        </h1>
+        
+        <p className="text-slate-400 text-lg mb-8 leading-relaxed">
+          A Copa do Mundo foi um sucesso e os resultados finais já estão gravados na história. 
+          O site encontra-se em modo de manutenção e as atividades foram encerradas. 
+          Agradecemos a todos os participantes!
+        </p>
+
+        <div className="bg-primary/10 border border-primary/20 text-primary px-8 py-3 rounded-xl font-bold uppercase tracking-widest text-sm">
+          Até a próxima Copa!
+        </div>
+      </div>
+    </div>
+  );
 
 function App() {
   return (
